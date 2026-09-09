@@ -18,9 +18,15 @@ unauthenticated and can go down. Every path that touches it must degrade, not cr
 npm run dev      # dev server, reads .env.local
 npm run build    # production build — run before claiming a change works
 npm run lint
+npm test         # Vitest, the rules in src/lib/squad.ts
+npm run test:watch
 ```
 
-There is no test runner yet. Adding one is Milestone 2.
+Tests live in `src/lib/__tests__/`. They cover `squad.ts` only — it is pure, shared by
+browser and server, and the one file where a quiet mistake becomes a wrong team on
+stream. Change a rule there and a test should go red; if none does, the rule was not
+pinned and the test is the missing half of the change. CI (`.github/workflows/ci.yml`)
+runs `npm test` then `npm run build` on every push.
 
 ## Environment
 
@@ -83,7 +89,8 @@ light/dark palette. No Tailwind, no CSS-in-JS — match that.
 
 Working end to end: pool creation, picking, server-side validation, live crowd XI,
 realtime updates, and a `/api/pools/[id]/scores` endpoint. Schema is applied and both
-Supabase keys are verified.
+Supabase keys are verified. M1 (identity, rate limiting) and M2 (`squad.ts` under
+test, CI) are done; the leaderboard screen is next.
 
 **What we are going to do:** finish the product properly before it goes near a real
 audience — close the security holes, get the rules under test, build the leaderboard

@@ -57,21 +57,51 @@ can see and whether realtime events still arrive.
 
 ---
 
-## M2 — Get the rules under test
+## M2 — Get the rules under test ✅ done
 
 `src/lib/squad.ts` holds every rule and all the crowd maths, is shared by browser and
-server, and has no tests. Do this before changing it.
+server, and had no tests. Done before changing it.
 
-- [ ] Add a test runner (Vitest — no bundler config needed for pure functions) and a
+- [x] Add a test runner (Vitest — no bundler config needed for pure functions) and a
       `npm test` script
-- [ ] Cover `validateEntry()`: each rejection reason, and a legal squad passing
-- [ ] Cover `crowdXI()`: formation comes out as an output, position caps hold, ties
+      `vitest.config.ts` carries the `@/*` alias and nothing else. Tests are in
+      `src/lib/__tests__/`, 94 of them, running in about a second.
+- [x] Cover `validateEntry()`: each rejection reason, and a legal squad passing
+      Every reachable rejection, plus the boundaries either side of the club cap and
+      the budget, plus the early return that stops the later checks dereferencing a
+      player who is not in the game. Three of the bounds it checks (more than 5
+      defenders, fewer than 2 midfielders, more than 3 forwards) cannot be reached
+      from a squad whose 2/5/5/3 counts are right; the defender one is tested from an
+      already-illegal 15 and the others are noted as structurally unreachable.
+- [x] Cover `crowdXI()`: formation comes out as an output, position caps hold, ties
       break deterministically, and it behaves with 0 and 1 entries
-- [ ] Cover `reserve()` — the held-back-money rule is subtle and easy to break
-- [ ] CI on push: `npm run build` + `npm test`
+      Vote counts are fed in directly so a test can state exactly how popular each
+      player is: 5-2-3 and 3-5-2 both fall out of the votes, the caps hold against
+      eight popular defenders, ties resolve by ownership then name, and the result is
+      independent of the order entries arrived in. Empty pool gives `0-0-0` and nulls
+      rather than throwing.
+- [x] Cover `reserve()` — the held-back-money rule is subtle and easy to break
+      Including `ignorePos` on a position that is already full, where the count goes
+      negative and must contribute nothing.
+- [x] CI on push: `npm run build` + `npm test`
+      `.github/workflows/ci.yml`, Node 22, `npm ci` then test then build. The build
+      gets placeholder Supabase values — it never calls the API, and `isConfigured` is
+      all they decide.
+
+Also covered, because they are the same rules seen from the other side:
+`validateSquad()` (the browser's copy), and a table asserting the browser and the
+server never disagree about whether a squad is legal — invariant 1 has a test now
+rather than a promise.
 
 **Done when:** `npm test` is green in CI and deliberately breaking a rule in
 `squad.ts` makes it fail.
+
+Checked by mutation rather than assumed: 27 deliberate breakages of `squad.ts` — club
+cap moved either way, budget off by a tenth, the crowd XI's base shape hard-coded, the
+tiebreak dropped, `reserve` ignoring its `ignorePos` — and every one turned the suite
+red. The first pass found a real hole: nothing pinned the club cap at exactly 3, so
+raising it to 4 went unnoticed. That is now a boundary test in all three places the
+rule appears.
 
 ---
 
