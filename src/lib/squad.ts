@@ -1,4 +1,4 @@
-import type { CrowdXI, Entry, EntryInput, Player, PosId, Ranked } from "./types";
+import type { CrowdXI, Entry, EntryInput, LiveStat, Player, PosId, Ranked } from "./types";
 
 export const POS: Record<PosId, string> = { 1: "GKP", 2: "DEF", 3: "MID", 4: "FWD" };
 export const POSLONG: Record<PosId, string> = {
@@ -6,6 +6,10 @@ export const POSLONG: Record<PosId, string> = {
 };
 /** The real FPL squad: 2 keepers, 5 defenders, 5 midfielders, 3 forwards. */
 export const SQUAD: Record<PosId, number> = { 1: 2, 2: 5, 3: 5, 4: 3 };
+/** What a legal starting XI may hold at each position. The auto-sub rules and
+ *  `validateEntry` are the same rule seen twice, so they read it from here. */
+export const XI_MIN: Record<PosId, number> = { 1: 1, 2: 3, 3: 2, 4: 1 };
+export const XI_MAX: Record<PosId, number> = { 1: 1, 2: 5, 3: 5, 4: 3 };
 export const BUDGET = 1000;      // £100.0m in FPL tenths
 export const MAXCLUB = 3;
 export const POSITIONS: PosId[] = [1, 2, 3, 4];
@@ -139,10 +143,10 @@ export function validateEntry(
 
   const xiCounts = { 1: 0, 2: 0, 3: 0, 4: 0 } as Record<PosId, number>;
   for (const id of xi) xiCounts[byId.get(id)!.pos]++;
-  if (xiCounts[1] !== 1) errs.push("A starting XI needs exactly one goalkeeper.");
-  if (xiCounts[2] < 3 || xiCounts[2] > 5) errs.push("A starting XI needs 3 to 5 defenders.");
-  if (xiCounts[3] < 2 || xiCounts[3] > 5) errs.push("A starting XI needs 2 to 5 midfielders.");
-  if (xiCounts[4] < 1 || xiCounts[4] > 3) errs.push("A starting XI needs 1 to 3 forwards.");
+  if (xiCounts[1] !== XI_MAX[1]) errs.push("A starting XI needs exactly one goalkeeper.");
+  if (xiCounts[2] < XI_MIN[2] || xiCounts[2] > XI_MAX[2]) errs.push("A starting XI needs 3 to 5 defenders.");
+  if (xiCounts[3] < XI_MIN[3] || xiCounts[3] > XI_MAX[3]) errs.push("A starting XI needs 2 to 5 midfielders.");
+  if (xiCounts[4] < XI_MIN[4] || xiCounts[4] > XI_MAX[4]) errs.push("A starting XI needs 1 to 3 forwards.");
 
   const clubs: Record<number, number> = {};
   for (const id of all) {
@@ -252,4 +256,119 @@ export function crowdXI(t: Tally, byId: Map<number, Player>): CrowdXI {
     cost,
     clubBreaches: Object.entries(clubs).filter(([, n]) => n > MAXCLUB).map(([team]) => team),
   };
+}
+
+/* ================= scoring ================= */
+
+export type Scored = {
+  points: number;
+  /** The XI that actually scored, after any auto-subs. */
+  xi: number[];
+  /** Whoever ended up wearing the armband — the vice, if the captain sat out. */
+  captain: number | null;
+  armbandMoved: boolean;
+  subs: { off: number; on: number }[];
+};
+
+const NOT_PLAYED: LiveStat = { pts: 0, min: 0 };
+
+/** Position counts of an XI. A player the game has dropped counts for nothing. */
+function shape(ids: number[], byId: Map<number, Player>): Record<PosId, number> {
+  const c = { 1: 0, 2: 0, 3: 0, 4: 0 } as Record<PosId, number>;
+  for (const id of ids) {
+    const pos = byId.get(id)?.pos;
+    if (pos) c[pos]++;
+  }
+  return c;
+}
+
+function legalXI(ids: number[], byId: Map<number, Player>): boolean {
+  const c = shape(ids, byId);
+  return POSITIONS.every((k) => c[k] >= XI_MIN[k] && c[k] <= XI_MAX[k]);
+}
+
+/**
+ * FPL's auto-subs: a starter who played no minutes is replaced by the first
+ * player on the bench who did play and whose position keeps the XI legal. The
+ * shape check is what stops an outfielder replacing the keeper, or a second
+ * keeper coming on — no special case needed for either.
+ *
+ * Bench order is the order the entry was submitted in, which the picker fixes as
+ * keeper first, then by position. Viewers cannot reorder their bench yet.
+ */
+export function autoSubs(
+  xi: number[],
+  bench: number[],
+  stats: Record<number, LiveStat>,
+  byId: Map<number, Player>,
+): { xi: number[]; subs: { off: number; on: number }[] } {
+  const out = [...xi];
+  const subs: { off: number; on: number }[] = [];
+  const used = new Set<number>();
+  const played = (id: number) => (stats[id] ?? NOT_PLAYED).min > 0;
+
+  for (let i = 0; i < out.length; i++) {
+    const off = out[i];
+    if (played(off)) continue;
+    for (const on of bench) {
+      if (used.has(on) || !played(on)) continue;
+      const trial = [...out];
+      trial[i] = on;
+      if (!legalXI(trial, byId)) continue;
+      out[i] = on;
+      used.add(on);
+      subs.push({ off, on });
+      break;
+    }
+  }
+  return { xi: out, subs };
+}
+
+/**
+ * One viewer's gameweek score, the way FPL settles it: captain doubled, bench
+ * not counted unless it comes on.
+ *
+ * `settled` says whether the gameweek has finished. Auto-subs and the armband
+ * only move once it has: before then a player on zero minutes has usually just
+ * not kicked off yet, and subbing them off would show a score that is wrong in
+ * a way nobody can explain on stream.
+ */
+export function scoreEntry(
+  entry: Pick<Entry, "xi" | "bench" | "captain" | "vice">,
+  stats: Record<number, LiveStat>,
+  byId: Map<number, Player>,
+  settled: boolean,
+): Scored {
+  const started = entry.xi ?? [];
+  const { xi, subs } = settled
+    ? autoSubs(started, entry.bench ?? [], stats, byId)
+    : { xi: [...started], subs: [] as { off: number; on: number }[] };
+
+  let captain: number | null = entry.captain ?? null;
+  let armbandMoved = false;
+  if (settled && captain && (stats[captain] ?? NOT_PLAYED).min === 0) {
+    if (entry.vice && entry.vice !== captain) {
+      captain = entry.vice;
+      armbandMoved = true;
+    }
+  }
+
+  const points = xi.reduce(
+    (sum, id) => sum + (stats[id] ?? NOT_PLAYED).pts * (id === captain ? 2 : 1),
+    0,
+  );
+
+  return { points, xi, captain, armbandMoved, subs };
+}
+
+/** Places in a table, sharing a rank on a tie the way a league table does. */
+export function rankBy<T>(rows: T[], points: (r: T) => number): (T & { rank: number })[] {
+  const sorted = [...rows].sort((a, b) => points(b) - points(a));
+  let rank = 0;
+  let last: number | null = null;
+  return sorted.map((r, i) => {
+    const p = points(r);
+    if (last === null || p !== last) { rank = i + 1; last = p; }
+    return { ...r, rank };
+  });
 }

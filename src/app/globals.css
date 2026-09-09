@@ -225,8 +225,18 @@ a.link{color:var(--hot); text-decoration:underline; text-underline-offset:2px}
 }
 .lb td{padding:8px 14px; border-bottom:1px solid var(--line-soft); font-size:14px}
 .lb td.n{font-variant-numeric:tabular-nums; text-align:right; font-weight:700}
-.lb tr:first-child td{background:var(--mint-soft)}
+.lb tbody tr:first-child td{background:var(--mint-soft)}
 .lb .rk{font-family:"Anton"; color:var(--text-3); width:34px}
+.lb td.sm{font-size:12.5px; color:var(--text-2)}
+.lb .tag{
+  display:inline-block; margin-left:6px; padding:1px 6px; border-radius:99px;
+  background:var(--gold-soft); color:var(--gold); font-size:10.5px; font-weight:700;
+  letter-spacing:.06em; text-transform:uppercase; vertical-align:1px;
+}
+.bigscore{display:flex; align-items:baseline; gap:9px; padding:14px}
+.bigscore b{font-family:"Anton"; font-size:46px; line-height:.9}
+.verdict{padding:0 14px 13px; font-size:14px; color:var(--text-2); line-height:1.5}
+.verdict em{font-style:normal; font-weight:700; color:var(--hot)}
 
 /* loading + error states */
 .skeleton{

@@ -20,6 +20,7 @@ npm run build    # production build — run before claiming a change works
 npm run lint
 npm test         # Vitest, the rules in src/lib/squad.ts
 npm run test:watch
+npm run verify:scores   # leaderboard vs. real FPL data; needs npm run dev
 ```
 
 Tests live in `src/lib/__tests__/`. They cover `squad.ts` only — it is pure, shared by
@@ -52,9 +53,11 @@ Browser ──picks squad──> POST /api/pools/[id]/entries ──validated─
   Next's 2MB response-cache limit, so it is fetched `no-store`, cut to ~100KB, and
   *that* is wrapped in `unstable_cache`. Do not naively cache the fetch.
 - **`src/lib/pools.ts`** — DB reads, `server-only`.
+- **`src/lib/scores.ts`** — the leaderboard, `server-only`. Read by both the scores
+  page and its API route so the two can never disagree about who won.
 - **`src/app/api/`** — every write. The browser never writes to Supabase directly.
-- **`src/components/`** — `TeamPicker` (picking), `LiveBoard` (results), `Pitch`/`Kit`
-  (drawn shirts), `assets.ts` (artwork manifest).
+- **`src/components/`** — `TeamPicker` (picking), `LiveBoard` (results), `Scoreboard`
+  (the leaderboard), `Pitch`/`Kit` (drawn shirts), `assets.ts` (artwork manifest).
 
 Styling is plain CSS in `src/app/globals.css` with CSS custom properties and a
 light/dark palette. No Tailwind, no CSS-in-JS — match that.
@@ -88,9 +91,9 @@ light/dark palette. No Tailwind, no CSS-in-JS — match that.
 ## Current state
 
 Working end to end: pool creation, picking, server-side validation, live crowd XI,
-realtime updates, and a `/api/pools/[id]/scores` endpoint. Schema is applied and both
-Supabase keys are verified. M1 (identity, rate limiting) and M2 (`squad.ts` under
-test, CI) are done; the leaderboard screen is next.
+realtime updates, and the leaderboard at `/p/[id]/scores`. Schema is applied and both
+Supabase keys are verified. M1 (identity, rate limiting), M2 (`squad.ts` under test,
+CI) and M3 (the leaderboard screen, with real auto-subs) are done; artwork is next.
 
 **What we are going to do:** finish the product properly before it goes near a real
 audience — close the security holes, get the rules under test, build the leaderboard
@@ -104,6 +107,7 @@ items off there as they land.
   not part of the build. Do not edit it; it gets deleted in Milestone 5.
 - `next dev` will silently pick port 3001 if 3000 is busy. Check the log before
   assuming which server you are hitting.
-- The `scores` endpoint scores an XI FPL-style but does **not** apply auto-subs or the
-  vice-captain fallback when the captain plays no minutes. That is a known gap, not an
-  oversight — see Milestone 3.
+- Auto-subs and the vice-captain fallback only apply once the FPL event is **settled**
+  (`finished && data_checked`). Mid-gameweek, nil minutes usually means the player has
+  not kicked off yet, so the board says "Provisional" and scores the XI as picked.
+  Do not "fix" this by always applying them.

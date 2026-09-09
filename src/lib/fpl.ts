@@ -1,5 +1,5 @@
 import { unstable_cache } from "next/cache";
-import type { Bootstrap, Player, PosId, Team } from "./types";
+import type { Bootstrap, Gameweek, LiveStat, Player, PosId, Team } from "./types";
 
 const BOOTSTRAP_URL = "https://fantasy.premierleague.com/api/bootstrap-static/";
 const LIVE_URL = (gw: number) => `https://fantasy.premierleague.com/api/event/${gw}/live/`;
@@ -39,6 +39,16 @@ async function fetchBootstrap(): Promise<Bootstrap> {
       news: e.news || "",
     }));
 
+  // Every gameweek, not just the next one: the scores page needs to know whether
+  // the gameweek a pool was pinned to has finished, which is what decides
+  // whether auto-subs have been applied yet.
+  const events: Gameweek[] = raw.events.map((e: any) => ({
+    id: e.id,
+    name: e.name,
+    deadline: e.deadline_time,
+    finished: Boolean(e.finished && e.data_checked),
+  }));
+
   const event =
     raw.events.find((e: any) => e.is_next) ??
     raw.events.find((e: any) => e.is_current) ??
@@ -50,6 +60,7 @@ async function fetchBootstrap(): Promise<Bootstrap> {
     deadline: event.deadline_time,
     teams,
     players,
+    events,
     fetchedAt: new Date().toISOString(),
   };
 }
@@ -59,20 +70,26 @@ export const getBootstrap = unstable_cache(fetchBootstrap, ["fpl-bootstrap"], {
   tags: ["fpl"],
 });
 
-/** Points scored by every player in a gameweek — used for the leaderboard. */
-async function fetchLivePoints(gw: number): Promise<Record<number, number>> {
+/**
+ * Points and minutes for every player in a gameweek. Minutes matter as much as
+ * points: a starter on zero minutes is who the bench comes on for, and a captain
+ * on zero minutes hands the armband to the vice.
+ */
+async function fetchLiveStats(gw: number): Promise<Record<number, LiveStat>> {
   const res = await fetch(LIVE_URL(gw), {
     headers: { "User-Agent": "crowd-xi/1.0" },
     cache: "no-store",
   });
   if (!res.ok) throw new Error(`FPL live API returned ${res.status}`);
   const raw = await res.json();
-  const out: Record<number, number> = {};
-  for (const el of raw.elements) out[el.id] = el.stats?.total_points ?? 0;
+  const out: Record<number, LiveStat> = {};
+  for (const el of raw.elements) {
+    out[el.id] = { pts: el.stats?.total_points ?? 0, min: el.stats?.minutes ?? 0 };
+  }
   return out;
 }
 
-export const getLivePoints = unstable_cache(fetchLivePoints, ["fpl-live"], {
+export const getLiveStats = unstable_cache(fetchLiveStats, ["fpl-live"], {
   revalidate: 120,      // points move during matches, so this one stays fresh
   tags: ["fpl"],
 });

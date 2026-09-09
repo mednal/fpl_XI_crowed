@@ -26,10 +26,22 @@ export default function LiveBoard({
   const [entries, setEntries] = useState<Row[]>(initialEntries);
   const [copied, setCopied] = useState(false);
   const [link, setLink] = useState("");
+  // Off until the browser says so: the server does not know the viewer's clock,
+  // and a link that appears mid-render would not match the markup sent down.
+  const [locked, setLocked] = useState(false);
 
   useEffect(() => {
     setLink(`${window.location.origin}/p/${pool.id}`);
   }, [pool.id]);
+
+  const deadline = pool.deadline;
+  useEffect(() => {
+    if (!deadline) return;
+    const check = () => setLocked(new Date(deadline).getTime() <= Date.now());
+    check();
+    const t = setInterval(check, 30000);
+    return () => clearInterval(t);
+  }, [deadline]);
 
   const refresh = useCallback(async () => {
     try {
@@ -102,6 +114,9 @@ export default function LiveBoard({
           <span className="eyebrow">Teams in</span>
           <b>{t.n}</b>
         </span>
+        {locked && (
+          <Link className="btn btn-sm" href={`/p/${pool.id}/scores`}>Scores</Link>
+        )}
         <Link className="btn btn-sm" href={`/p/${pool.id}`}>My team</Link>
       </div>
 

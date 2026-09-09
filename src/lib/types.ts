@@ -15,12 +15,23 @@ export type Player = {
   news: string;
 };
 
+export type Gameweek = {
+  id: number;
+  name: string;
+  deadline: string;   // ISO
+  finished: boolean;  // scores settled, so auto-subs have been applied
+};
+
+/** Points and minutes a player recorded in one gameweek. */
+export type LiveStat = { pts: number; min: number };
+
 export type Bootstrap = {
   gw: number;
   gwName: string;
   deadline: string;   // ISO
   teams: Team[];
   players: Player[];
+  events: Gameweek[];
   fetchedAt: string;
 };
 

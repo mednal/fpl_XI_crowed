@@ -105,26 +105,59 @@ rule appears.
 
 ---
 
-## M3 — The leaderboard screen
+## M3 — The leaderboard screen ✅ done
 
-The endpoint exists and nothing renders it. This is the app's missing third page.
+The endpoint existed and nothing rendered it. This was the app's missing third page.
 
-- [ ] Build `/p/[id]/scores` on top of `GET /api/pools/[id]/scores`
-- [ ] Show the crowd XI's own score against the field — "the crowd beat 62 of 89
-      viewers" is the number worth putting on screen
-- [ ] Handle the `{ pending: true }` response before kickoff, and the 503 when the FPL
+- [x] Build `/p/[id]/scores` on top of `GET /api/pools/[id]/scores`
+      The maths moved into `src/lib/scores.ts`, which the page and the route both
+      read — a page cannot fetch its own API route without an absolute URL, and two
+      copies of the sum would eventually disagree about who won. The page renders on
+      the server so the host lands on a finished board, and the client refreshes it
+      every minute while the gameweek is still running.
+- [x] Show the crowd XI's own score against the field
+      "The crowd beat 6 of 11 viewers, which would put it 4th in the table", with the
+      crowd's points, formation and captain beside it.
+- [x] Handle the `{ pending: true }` response before kickoff, and the 503 when the FPL
       live API is down
-- [ ] **Scoring fidelity:** the endpoint currently doubles the captain and ignores the
-      bench, but does not apply auto-subs or pass the armband to the vice when the
-      captain plays no minutes. Decide explicitly whether to implement real FPL
-      behaviour or document the simplification on the page. Implementing it needs
-      minutes played, which the live endpoint already returns.
-- [ ] Link it from `/p/[id]/live` once the gameweek is under way
+      Before kickoff the page says so and offers the live board instead of showing
+      everybody on nil. A 503 keeps the banner and explains that nothing is lost.
+- [x] **Scoring fidelity:** implemented, rather than documented away.
+      `autoSubs()` and `scoreEntry()` are in `squad.ts` with the rest of the rules. A
+      starter on nil minutes is replaced by the first bench player who played and
+      whose position keeps the XI legal — the shape check is what stops an outfielder
+      replacing the keeper or a second keeper coming on, so neither needed a special
+      case — and the armband passes to the vice when the captain did not play.
+      Both are gated on the gameweek being **settled** (`finished && data_checked` on
+      the FPL event). Mid-gameweek, a player on nil minutes has usually just not
+      kicked off yet, and subbing them off would put a number on stream that nobody
+      can explain. Until then the board says "Provisional" and scores the XI as
+      picked. `getLivePoints` became `getLiveStats` to carry minutes, and `Bootstrap`
+      now carries every gameweek's `finished` flag rather than only the next one.
+- [x] Link it from `/p/[id]/live` once the gameweek is under way
+      A Scores button appears in the live topbar once the deadline has passed. It is
+      switched on by the browser rather than at render, like the countdown beside it,
+      because the server does not know the viewer's clock.
 
 **Done when:** a host can open the scores page after a gameweek and see a correct,
 explainable leaderboard.
 
----
+Checked twice over. 22 new unit tests pin the scoring rules (`squad.score.test.ts`) —
+the bench order, the shape constraint refusing an illegal sub, each bench player used
+once, the armband moving and staying — and `npm run verify:scores` builds pools
+against a real settled gameweek, recomputes every row from the FPL live endpoint
+independently of the app, and compares: points, sub counts, who wore the armband, the
+ordering, shared ranks on a tie, the crowd's rank and the count it beat, plus the
+pending and 404 paths. All 22 checks green against Gameweek 3.
+
+One thing the crowd XI needed spelling out: who it captains and who it picks are two
+separate votes, so the most-voted captain is not always in the crowd XI. The armband
+goes to the most-voted captain who is actually on the pitch — the same player the live
+board draws the C on — because nobody else can be doubled.
+
+Known limitation, not a gap: a viewer cannot order their own bench, so auto-subs come
+on in the order the picker fixed (keeper first, then by position). Real FPL lets a
+manager rank the three outfield substitutes.
 
 ## M4 — Artwork
 
