@@ -1,0 +1,1035 @@
+<title>Crowd XI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<style>
+:root{
+  --ground:#F1EFF5; --panel:#FFFFFF; --panel-2:#F7F5FA; --line:#DFDAE8; --line-soft:#EBE7F1;
+  --text:#1B1526; --text-2:#5C5370; --text-3:#8E85A3;
+  --hot:#E5185F; --hot-soft:#FDE7EF; --mint:#0F9E6E; --mint-soft:#E2F7EF;
+  --gold:#B87400; --gold-soft:#FFF2D9; --cool:#4B3FA8;
+  --pitch-a:#0F6B45; --pitch-b:#12764C; --pitch-line:rgba(255,255,255,.30);
+  --shadow:0 1px 2px rgba(27,21,38,.07), 0 8px 24px -12px rgba(27,21,38,.22);
+  --r-lg:14px; --r-md:10px; --r-sm:7px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#141020; --panel:#1E1830; --panel-2:#251E3A; --line:#342B4D; --line-soft:#2A2340;
+    --text:#F2EEFA; --text-2:#B0A6C6; --text-3:#7E7396;
+    --hot:#FF3D7F; --hot-soft:#3B1229; --mint:#33E3A4; --mint-soft:#0E3B2C;
+    --gold:#FFC24D; --gold-soft:#3A2A08; --cool:#A99BFF;
+    --pitch-a:#0B4E33; --pitch-b:#0E5B3C;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#141020; --panel:#1E1830; --panel-2:#251E3A; --line:#342B4D; --line-soft:#2A2340;
+  --text:#F2EEFA; --text-2:#B0A6C6; --text-3:#7E7396;
+  --hot:#FF3D7F; --hot-soft:#3B1229; --mint:#33E3A4; --mint-soft:#0E3B2C;
+  --gold:#FFC24D; --gold-soft:#3A2A08; --cool:#A99BFF;
+  --pitch-a:#0B4E33; --pitch-b:#0E5B3C;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--text);
+  font-family:"Barlow",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3{margin:0; text-wrap:balance}
+button{font:inherit; color:inherit; cursor:pointer}
+:focus-visible{outline:2px solid var(--hot); outline-offset:2px; border-radius:4px}
+@media (prefers-reduced-motion:reduce){ *{animation-duration:.01ms!important; transition-duration:.01ms!important} }
+
+.display{font-family:"Anton",Impact,sans-serif; text-transform:uppercase; line-height:.95}
+.eyebrow{font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--text-3)}
+.num{font-variant-numeric:tabular-nums}
+.btn{
+  border:1px solid var(--line); background:var(--panel); padding:8px 14px; border-radius:var(--r-md);
+  font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:7px; transition:.15s;
+}
+.btn:hover{border-color:var(--text-3)}
+.btn-primary{background:var(--hot); border-color:var(--hot); color:#fff}
+.btn-primary:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.4; cursor:not-allowed; filter:none}
+.btn-ghost{background:transparent}
+.btn-sm{padding:5px 10px; font-size:13px; border-radius:var(--r-sm)}
+.chip{
+  display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:999px;
+  font-size:12px; font-weight:600; background:var(--panel-2); border:1px solid var(--line-soft); color:var(--text-2);
+}
+.chip.live{background:var(--hot-soft); color:var(--hot); border-color:transparent}
+.chip.live::before{content:""; width:6px; height:6px; border-radius:50%; background:var(--hot); animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.chip.warn{background:var(--gold-soft); color:var(--gold); border-color:transparent}
+.chip.good{background:var(--mint-soft); color:var(--mint); border-color:transparent}
+
+.topbar{
+  display:flex; align-items:center; gap:14px; padding:10px 18px;
+  border-bottom:1px solid var(--line); background:var(--panel); position:sticky; top:0; z-index:30;
+}
+.brand{display:flex; align-items:center; gap:9px; font-family:"Anton"; font-size:19px; letter-spacing:.02em; text-transform:uppercase; background:none; border:0; padding:0}
+.brand .dot{width:11px; height:11px; border-radius:50%; background:var(--hot); box-shadow:0 0 0 3px var(--hot-soft)}
+.topbar .spacer{flex:1}
+.meter{display:flex; align-items:baseline; gap:6px}
+.meter b{font-family:"Anton"; font-size:20px}
+.meter.over b{color:var(--hot)}
+
+.shell{display:grid; grid-template-columns:minmax(0,1fr) 372px; gap:18px; padding:18px; align-items:start; max-width:1320px; margin:0 auto}
+@media (max-width:980px){ .shell{grid-template-columns:minmax(0,1fr)} }
+
+.pitchwrap{background:var(--panel); border:1px solid var(--line); border-radius:var(--r-lg); overflow:hidden; box-shadow:var(--shadow)}
+.pitchbar{display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--line); flex-wrap:wrap}
+.pitch{
+  position:relative; padding:16px 10px 12px;
+  background:repeating-linear-gradient(180deg,var(--pitch-a) 0 44px,var(--pitch-b) 44px 88px);
+}
+.pitch::before{
+  content:""; position:absolute; left:50%; top:38%; transform:translateX(-50%);
+  width:92px; height:92px; border:2px solid var(--pitch-line); border-radius:50%; pointer-events:none;
+}
+.pitch::after{
+  content:""; position:absolute; left:50%; transform:translateX(-50%); top:0;
+  width:44%; height:54px; border:2px solid var(--pitch-line); border-top:0; border-radius:0 0 6px 6px; pointer-events:none;
+}
+.row{display:flex; justify-content:center; gap:clamp(4px,1.6vw,20px); position:relative; z-index:2; margin-bottom:14px}
+.row:last-child{margin-bottom:0}
+.bench{background:var(--panel-2); border-top:1px solid var(--line); padding:11px 10px 13px}
+.bench .benchlabel{text-align:center; margin-bottom:8px}
+
+.slot{width:clamp(62px,10.5vw,88px); display:flex; flex-direction:column; align-items:center; position:relative; background:none; border:0; padding:0}
+.slot .kit{width:100%; height:auto; display:block; filter:drop-shadow(0 3px 5px rgba(0,0,0,.35)); transition:transform .14s}
+.slot:hover .kit{transform:translateY(-3px)}
+.slot.empty .kit{opacity:.42}
+.plate{width:100%; margin-top:-3px; border-radius:5px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.plate .nm{
+  background:var(--panel); color:var(--text); font-family:"Barlow Condensed"; font-weight:700;
+  font-size:13px; line-height:1.35; text-align:center; padding:1px 3px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.plate .sub{
+  background:var(--panel-2); color:var(--text-2); font-size:11px; font-weight:600; text-align:center;
+  padding:1px 3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums;
+}
+.plate .sub.pct{background:var(--hot); color:#fff; letter-spacing:.02em}
+.slot.empty .plate .nm{color:var(--text-3); font-weight:600}
+.badge{
+  position:absolute; top:-4px; right:2px; width:23px; height:23px; border-radius:50%;
+  display:grid; place-items:center; font-size:11px; font-weight:700; z-index:3;
+  background:var(--gold); color:#231800; border:2px solid var(--panel); box-shadow:0 2px 5px rgba(0,0,0,.3);
+}
+.badge.v{background:var(--panel); color:var(--text-2); border-color:var(--line)}
+
+.rail{display:flex; flex-direction:column; gap:14px; position:sticky; top:74px}
+@media (max-width:980px){ .rail{position:static} }
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:var(--r-lg); overflow:hidden; box-shadow:var(--shadow)}
+.panel > header{padding:11px 14px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:9px}
+.panel > header h3{font-family:"Anton"; font-size:15px; text-transform:uppercase; letter-spacing:.03em; flex:1}
+.panelbody{padding:12px 14px; display:flex; flex-direction:column; gap:10px}
+.tools{display:flex; gap:7px; padding:10px 12px; border-bottom:1px solid var(--line-soft); flex-wrap:wrap}
+input[type=text], input[type=search], select{
+  font:inherit; font-size:14px; padding:7px 10px; border:1px solid var(--line); border-radius:var(--r-sm);
+  background:var(--panel-2); color:var(--text); min-width:0;
+}
+input::placeholder{color:var(--text-3)}
+.tools input[type=search]{flex:1 1 120px}
+
+.plist{max-height:min(58vh,560px); overflow:auto; overflow-x:hidden}
+.prow{
+  display:grid; grid-template-columns:30px minmax(0,1fr) 52px 44px; align-items:center; gap:9px;
+  padding:7px 12px; border:0; border-bottom:1px solid var(--line-soft); width:100%; text-align:left; background:none;
+}
+.prow:hover:not(:disabled){background:var(--panel-2)}
+.prow:disabled{opacity:.38; cursor:not-allowed}
+.kitmini{width:26px; height:26px; display:block; object-fit:contain}
+img.kit{object-fit:contain}
+.club-badge{width:14px; height:14px; object-fit:contain; vertical-align:-3px}
+.brandlogo{height:22px; width:auto; max-width:110px; object-fit:contain; display:block; border-radius:4px}
+.prow .who{min-width:0}
+.prow .who .n{font-weight:600; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.prow .who .m{font-size:11.5px; color:var(--text-3); font-weight:500; letter-spacing:.02em}
+.prow .price{font-weight:700; font-size:14px; text-align:right; font-variant-numeric:tabular-nums}
+.prow .pts{font-size:13px; color:var(--text-2); text-align:right; font-variant-numeric:tabular-nums}
+.empty-note{padding:22px 14px; text-align:center; color:var(--text-3); font-size:14px}
+
+.rank{display:flex; flex-direction:column; gap:3px; padding:8px 14px; border-bottom:1px solid var(--line-soft)}
+.rank .top{display:flex; align-items:center; gap:8px}
+.rank .pos{width:16px; font-family:"Anton"; font-size:13px; color:var(--text-3); flex:0 0 auto}
+.rank .nm{flex:1; font-weight:600; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.rank .tm{font-size:11px; font-weight:600; color:var(--text-3); letter-spacing:.03em}
+.rank .pc{font-family:"Anton"; font-size:15px; font-variant-numeric:tabular-nums; min-width:46px; text-align:right}
+.bar{height:4px; border-radius:99px; background:var(--line-soft); overflow:hidden; margin-left:24px}
+.bar > i{display:block; height:100%; background:var(--hot); border-radius:99px; transition:width .5s cubic-bezier(.2,.8,.2,1)}
+.rank.in .pc{color:var(--mint)}
+.rank.in .bar > i{background:var(--mint)}
+.grouphead{padding:8px 14px 4px; display:flex; align-items:center; gap:8px; background:var(--panel-2); border-bottom:1px solid var(--line-soft)}
+.grouphead .eyebrow{flex:1}
+
+.home{max-width:1020px; margin:0 auto; padding:34px 20px 60px}
+.hero{display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); gap:34px; align-items:start}
+@media (max-width:820px){ .hero{grid-template-columns:1fr; gap:26px} }
+.hero h1{font-family:"Anton"; font-size:clamp(38px,6.6vw,64px); text-transform:uppercase; line-height:.92}
+.hero h1 em{font-style:normal; color:var(--hot)}
+.lede{font-size:17px; color:var(--text-2); max-width:50ch; margin-top:14px}
+.steps{margin:24px 0 0; border-top:1px solid var(--line)}
+.step{display:grid; grid-template-columns:30px 1fr; gap:12px; padding:12px 2px; border-bottom:1px solid var(--line)}
+.step .n{font-family:"Anton"; font-size:17px; color:var(--hot)}
+.step b{display:block; font-weight:600}
+.step span{color:var(--text-2); font-size:14px}
+.formcard{padding:18px; display:flex; flex-direction:column; gap:13px}
+.field{display:flex; flex-direction:column; gap:5px}
+.field label{font-size:12.5px; font-weight:600; color:var(--text-2); letter-spacing:.02em}
+.field input, .field select{width:100%}
+.switch{display:flex; align-items:flex-start; gap:10px; padding:11px 12px; border:1px solid var(--line); border-radius:var(--r-md); background:var(--panel-2); cursor:pointer}
+.switch input{margin:3px 0 0; accent-color:var(--hot); width:16px; height:16px; flex:0 0 auto}
+.switch b{display:block; font-size:14px; font-weight:600}
+.switch span{font-size:12.5px; color:var(--text-3); display:block; line-height:1.4}
+
+.sharebox{display:flex; gap:8px; align-items:center; padding:10px 12px; background:var(--panel-2); border:1px dashed var(--line); border-radius:var(--r-md)}
+.sharebox code{flex:1; font-family:"Barlow"; font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-2)}
+
+.banner{display:flex; align-items:center; gap:10px; padding:9px 18px; background:var(--gold-soft); color:var(--gold); font-size:13.5px; font-weight:600; border-bottom:1px solid var(--line); flex-wrap:wrap}
+.banner .btn{margin-left:auto}
+.stats{display:grid; grid-template-columns:repeat(3,1fr); border-top:1px solid var(--line-soft)}
+.stat{padding:11px 14px; border-right:1px solid var(--line-soft)}
+.stat:last-child{border-right:0}
+.stat b{display:block; font-family:"Anton"; font-size:23px; line-height:1.1; font-variant-numeric:tabular-nums}
+.toast{
+  position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:90;
+  background:var(--text); color:var(--ground); padding:10px 18px; border-radius:999px;
+  font-weight:600; font-size:14px; box-shadow:var(--shadow); opacity:0; pointer-events:none; transition:.25s;
+}
+.toast.on{opacity:1; transform:translate(-50%,-6px)}
+.hint{font-size:12.5px; color:var(--text-3); line-height:1.45}
+.err{color:var(--hot); font-size:13px; font-weight:600}
+.center{text-align:center}
+
+.plate{display:flex; flex-direction:column}
+.plate .nm, .plate .sub{display:block; width:100%}
+.prow .who{display:flex; flex-direction:column; line-height:1.25}
+.prow .who .n, .prow .who .m{display:block}
+</style>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+<script>window.FPL={"gw":4,"gwName":"Gameweek 4","deadline":"2026-09-12T12:30:00Z","teams":[[1,"ARS","Arsenal"],[2,"AVL","Aston Villa"],[3,"BOU","Bournemouth"],[4,"BRE","Brentford"],[5,"BHA","Brighton"],[6,"CHE","Chelsea"],[7,"COV","Coventry City"],[8,"CRY","Crystal Palace"],[9,"EVE","Everton"],[10,"FUL","Fulham"],[11,"HUL","Hull City"],[12,"IPS","Ipswich Town"],[13,"LEE","Leeds"],[14,"LIV","Liverpool"],[15,"MCI","Man City"],[16,"MUN","Man Utd"],[17,"NEW","Newcastle"],[18,"NFO","Nott'm Forest"],[19,"TOT","Spurs"],[20,"SUN","Sunderland"]],"players":[[1,"Raya",1,1,60,15,5,38.9,"a"],[2,"Arrizabalaga",1,1,49,0,0,0.1,"a"],[3,"Meslier",1,1,49,0,0,0,"a"],[4,"Gabriel",2,1,80,15,5,24.8,"a"],[5,"J.Timber",2,1,65,0,0,0.1,"d"],[6,"Saliba",2,1,60,0,0,0.2,"i"],[7,"Lewis-Skelly",3,1,55,8,2.7,0.7,"a"],[8,"Calafiori",2,1,57,22,7.3,47.6,"a"],[9,"Hincapie",2,1,53,2,0.7,1.1,"a"],[10,"White",2,1,55,20,6.7,7.6,"a"],[11,"Mosquera",2,1,54,12,4,3.5,"d"],[12,"Saka",3,1,95,22,7.3,11.4,"a"],[13,"Rice",3,1,74,13,4.3,13.6,"a"],[14,"Eze",3,1,64,2,0.7,1.3,"a"],[15,"Ødegaard",3,1,66,24,8,13.5,"a"],[16,"Madueke",3,1,63,2,0.7,0.2,"a"],[17,"Merino",3,1,59,2,0.7,0.5,"a"],[19,"Zubimendi",3,1,54,3,1,0.7,"a"],[20,"Dowman",3,1,53,0,0,0.1,"a"],[25,"Gyökeres",4,1,73,1,0.3,4.1,"a"],[26,"Havertz",4,1,75,16,5.3,7.5,"a"],[31,"Konsa",2,1,44,5,1.7,13.3,"a"],[452,"Bruno G.",3,1,68,1,0.3,1.8,"a"],[557,"Tzolis",3,1,64,11,3.7,17.4,"a"],[29,"M.Bizot",1,2,45,1,0.3,0.1,"a"],[32,"Cash",2,2,45,7,2.3,6.8,"a"],[33,"Mings",2,2,45,7,2.3,0.4,"a"],[34,"Pau",2,2,45,2,0.7,0.4,"a"],[35,"Bogarde",3,2,50,1,0.3,0.1,"a"],[36,"Maatsen",2,2,45,8,2.7,0.8,"a"],[37,"Lindelöf",2,2,45,6,2,0.3,"a"],[38,"A.García",2,2,40,0,0,1.7,"a"],[41,"Buendía",3,2,59,7,2.3,1,"a"],[45,"McGinn",3,2,54,5,1.7,2.3,"a"],[46,"Barkley",3,2,50,7,2.3,0.3,"a"],[47,"Kamara",3,2,50,7,2.3,0.3,"a"],[48,"Onana",3,2,50,0,0,0,"i"],[50,"Burrowes",3,2,45,0,0,0.7,"a"],[51,"George Hemmings",3,2,45,7,2.3,1.2,"a"],[52,"Alysson",3,2,50,2,0.7,0,"a"],[53,"Manzambi",3,2,59,0,0,0.1,"i"],[54,"Gomes",3,2,55,-2,-0.7,0,"s"],[56,"Abraham",4,2,55,2,0.7,0.2,"a"],[160,"Garnacho",3,2,59,3,1,0.4,"a"],[166,"N.Jackson",4,2,65,4,1.3,1.1,"a"],[582,"Madjo",4,2,55,0,0,0.3,"i"],[596,"Ruggeri",2,2,45,2,0.7,0.1,"a"],[597,"Suzuki",1,2,50,12,4,1.5,"a"],[606,"Rowe",2,2,40,0,0,0.2,"a"],[611,"Wan-Bissaka",2,2,45,2,1,0.2,"a"],[618,"Goretzka",3,2,60,0,0,0.1,"a"],[630,"Harwood-Bellis",2,2,45,0,0,0,"a"],[631,"Mbaye",3,2,60,0,0,0.1,"a"],[57,"Petrović",1,3,45,6,2,3.3,"a"],[58,"Forster",1,3,40,0,0,3.4,"a"],[60,"Hill",2,3,55,6,2,0.8,"a"],[61,"Truffert",2,3,55,5,1.7,3.5,"a"],[62,"Diakité",2,3,50,0,0,0.2,"a"],[63,"Milosavljević",2,3,50,0,0,0,"i"],[64,"Smith",2,3,45,2,0.7,0.1,"a"],[65,"J.Araujo",2,3,44,0,0,0,"i"],[66,"Soler",2,3,40,0,0,0.3,"a"],[67,"Rayan",3,3,64,6,2,2,"a"],[68,"Tavernier",3,3,60,21,7,3.1,"a"],[69,"Scott",3,3,60,24,8,4.3,"a"],[70,"Kluivert",3,3,60,7,2.3,1,"a"],[71,"Cook",3,3,50,7,2.3,0.2,"a"],[72,"Gannon-Doak",3,3,49,2,0.7,0.1,"a"],[73,"Adams",3,3,50,6,2,0.3,"a"],[74,"Brooks",3,3,50,2,0.7,0.1,"a"],[75,"Christie",3,3,50,2,0.7,0,"a"],[76,"Tóth.A",3,3,50,1,0.3,0,"a"],[77,"Adli",3,3,49,0,0,0,"i"],[78,"Kroupi.Jr",3,3,74,0,0,0.2,"i"],[79,"Evanilson",4,3,60,11,3.7,3.3,"a"],[81,"Rodríguez",4,3,60,1,0.3,0.1,"a"],[566,"Silva",2,3,50,7,2.3,0.4,"a"],[573,"Sanchez",2,3,45,0,0,0.2,"a"],[608,"Jebbison",4,3,50,2,0.7,0.1,"a"],[615,"Di Gregorio",1,3,45,0,0,0,"a"],[82,"Kelleher",1,4,50,11,3.7,6.8,"a"],[83,"Valdimarsson",1,4,45,0,0,0.1,"a"],[84,"Collins",2,4,55,10,3.3,1.8,"d"],[85,"Van den Berg",2,4,49,0,0,0.1,"i"],[86,"Lewis-Potter",3,4,55,18,6,2.2,"a"],[87,"Ajer",2,4,45,13,4.3,4.9,"a"],[88,"Kayode",2,4,46,16,5.3,9.1,"a"],[89,"Henry",2,4,45,1,0.3,0.2,"a"],[90,"Hickey",2,4,45,3,1,0.1,"a"],[92,"Ji-soo",2,4,45,0,0,0,"a"],[93,"Schuster",2,4,45,4,1.3,0.1,"a"],[94,"Schade",3,4,60,15,5,3.9,"a"],[95,"O.Dango",3,4,64,5,1.7,0.7,"a"],[96,"Damsgaard",3,4,55,12,4,0.5,"a"],[97,"Jensen",3,4,55,6,2,0.1,"i"],[98,"Janelt",3,4,50,21,7,1.6,"a"],[99,"Milambo",3,4,50,0,0,0,"i"],[100,"Carvalho",3,4,50,0,0,0,"a"],[102,"Yarmoliuk",3,4,49,2,0.7,0.8,"a"],[103,"Dasilva",3,4,50,0,0,0,"i"],[105,"Anthony",3,4,60,4,1.3,0.1,"a"],[106,"Thiago",4,4,79,4,1.3,12,"a"],[107,"Furo",4,4,45,0,0,1.1,"a"],[108,"Wilson",4,4,55,3,1,0.4,"a"],[565,"M.Sangaré",3,4,57,18,6,14.1,"a"],[620,"Diouf",2,4,45,0,0,0.1,"a"],[109,"Verbruggen",1,5,45,9,3,22.2,"a"],[111,"Steele",1,5,40,0,0,4.3,"a"],[113,"F.Kadıoğlu",2,5,44,2,0.7,1.8,"a"],[114,"Boscagli",2,5,45,7,2.3,0.3,"a"],[115,"De Cuyper",2,5,48,21,7,19.7,"a"],[116,"Dunk",2,5,45,10,3.3,1.3,"a"],[117,"Coppola",2,5,45,0,0,0,"a"],[119,"Costinha",2,5,45,2,0.7,0,"a"],[120,"Svoboda",2,5,50,0,0,0.1,"a"],[121,"Mitoma",3,5,59,0,0,0,"i"],[122,"Minteh",3,5,59,0,0,0,"i"],[123,"Hinshelwood",3,5,60,16,5.3,1.1,"d"],[124,"Groß",3,5,55,16,5.3,16.2,"a"],[125,"Georginio",4,5,55,5,1.7,0.6,"d"],[126,"O'Riley",3,5,55,0,0,0.1,"a"],[127,"Gomez",3,5,50,13,4.3,4.9,"a"],[129,"Ayari",3,5,54,4,1.3,0.4,"a"],[130,"Wieffer",2,5,50,7,2.3,0.3,"i"],[134,"Oriola",3,5,45,0,0,0.3,"a"],[135,"Yohanna",3,5,49,1,0.3,0.1,"a"],[137,"Tzimas",4,5,55,0,0,0,"i"],[138,"Kostoulas",4,5,55,8,2.7,0.5,"a"],[139,"Ferguson",4,5,50,0,0,0,"i"],[328,"Struijk",2,5,50,1,0.3,0.2,"a"],[504,"Vuskovic",2,5,50,18,6,2.9,"a"],[594,"David",4,5,60,1,0.3,0.2,"a"],[600,"Osman",3,5,50,2,0.7,0,"a"],[605,"Yalcouyé",3,5,45,11,3.7,2.7,"a"],[614,"Hadjam",2,5,45,0,0,0,"a"],[639,"Andrés",3,5,55,0,0,0,"a"],[652,"Azeez",3,5,55,0,0,0,"i"],[28,"Martinez",1,6,50,5,1.7,4.9,"a"],[40,"Rogers",3,6,76,19,6.3,28.4,"a"],[101,"Henderson",3,6,50,0,0,0,"d"],[136,"Welbeck",4,6,59,1,0.3,0.8,"a"],[142,"James",2,6,54,2,0.7,7.8,"a"],[144,"Gusto",2,6,50,3,1,1.1,"a"],[145,"Fofana",2,6,50,3,1,0.1,"a"],[148,"Hato",2,6,45,8,2.7,0.8,"a"],[149,"Colwill",2,6,49,1,0.3,1.1,"a"],[151,"Acheampong",2,6,45,5,1.7,0.4,"a"],[152,"Palestra",2,6,54,0,0,1.1,"d"],[154,"Palmer",3,6,96,21,7,22.1,"a"],[156,"Neto",3,6,65,10,3.3,1.3,"a"],[157,"Estêvão",3,6,64,2,0.7,0.8,"a"],[158,"Gittens",3,6,59,0,0,0,"a"],[159,"Caicedo",3,6,54,1,0.3,1.7,"d"],[161,"Lavia",3,6,50,9,3,0.2,"a"],[164,"Quenda",3,6,54,1,0.3,0,"a"],[165,"João Pedro",4,6,77,21,7,72.3,"a"],[169,"Mheuka",4,6,45,0,0,0.4,"a"],[170,"Emegha",4,6,50,0,0,0.2,"a"],[200,"Lacroix",2,6,60,9,3,8.2,"a"],[560,"Penders",1,6,45,0,0,0.1,"a"],[561,"Anselmino",2,6,45,0,0,0,"a"],[568,"Barco",3,6,55,1,0.3,0.1,"a"],[583,"Chavarria",2,6,49,3,1,0.2,"a"],[91,"Pinnock",2,7,45,4,1.3,0.1,"a"],[104,"Onyeka",3,7,49,4,1.3,0.1,"a"],[110,"Rushworth",1,7,45,5,1.7,1,"a"],[172,"Wilson",1,7,45,0,0,0.4,"a"],[173,"Thomas",2,7,40,15,5,8.7,"a"],[175,"van Ewijk",2,7,40,6,2,11.1,"a"],[176,"Dasilva",2,7,40,5,1.7,0.7,"a"],[177,"Kesler-Hayden",2,7,40,0,0,0,"i"],[178,"Bidwell",2,7,40,0,0,0.1,"a"],[179,"Latibeaudiere",2,7,40,0,0,0,"a"],[180,"Woolfenden",2,7,40,0,0,0.1,"i"],[182,"Amenda",2,7,40,4,1.3,0.8,"a"],[183,"Rudoni",3,7,50,6,2,0.1,"a"],[184,"Grimes",3,7,50,6,2,0.2,"a"],[185,"Sakamoto",3,7,49,1,0.3,0.1,"a"],[186,"Mason-Clark",3,7,54,3,1,0.1,"a"],[187,"Eccles",3,7,49,0,0,0,"a"],[188,"Torp",3,7,54,2,0.7,0.1,"a"],[189,"Shepherd",3,7,45,0,0,0.3,"a"],[190,"Tchaouna",3,7,55,4,1.3,0.1,"a"],[193,"Wright",4,7,54,0,0,0.1,"i"],[194,"Thomas-Asante",4,7,50,4,1.3,0.8,"a"],[195,"Simms",4,7,50,3,1,0.8,"a"],[492,"Awoniyi",4,7,55,5,1.7,0.7,"a"],[575,"Yirenkyi",3,7,49,5,1.7,0.2,"a"],[584,"Hamer",3,7,54,3,1,0.1,"a"],[599,"Cherif",4,7,50,0,0,0.1,"a"],[623,"Bentley",1,7,40,0,0,0.4,"a"],[42,"Guessand",3,8,55,2,0.7,0,"a"],[153,"Disasi",2,8,45,4,1.3,0.1,"a"],[198,"Henderson",1,8,50,5,1.7,1.9,"a"],[199,"Benitez",1,8,45,0,0,0.1,"a"],[202,"Richards",2,8,50,4,1.3,0.7,"a"],[203,"Canvot",2,8,49,2,0.7,0.2,"a"],[204,"Mitchell",2,8,45,16,5.3,5.6,"a"],[206,"Chadi Riad",2,8,44,1,0.3,0,"i"],[207,"Mingueza",2,8,44,2,0.7,0.1,"a"],[208,"Sarr",3,8,63,0,0,0.9,"i"],[210,"Wharton",3,8,55,8,2.7,0.9,"a"],[211,"Yeremy",3,8,55,11,3.7,0.3,"a"],[212,"Hughes",3,8,45,1,0.3,8.9,"a"],[213,"Lerma",3,8,49,0,0,0.1,"a"],[214,"Kamada",3,8,50,10,3.3,0.3,"a"],[217,"M.França",3,8,49,0,0,0,"a"],[218,"Doucouré",3,8,49,0,0,0.1,"a"],[219,"J.Rak-Sakyi",3,8,50,0,0,0,"a"],[221,"Drakes-Thomas",3,8,45,0,0,0.1,"a"],[222,"Strand Larsen",4,8,60,4,1.3,0.5,"a"],[223,"Mateta",4,8,64,2,0.7,2,"i"],[224,"Nketiah",4,8,55,7,2.3,0.7,"a"],[241,"McNeil",3,8,54,3,1,0.1,"a"],[555,"Matthews",1,8,40,0,0,1.8,"a"],[577,"Tomiyasu",2,8,45,2,0.7,0.3,"a"],[588,"Khalaili",2,8,50,6,2,0.2,"a"],[595,"Gozo",3,8,50,1,0.3,0,"a"],[633,"Ahanor",2,8,45,0,0,0,"a"],[643,"Chilwell",2,8,45,7,7,0.3,"a"],[644,"Timber",3,8,50,2,2,0,"a"],[647,"Osorio",3,8,55,1,1,0,"a"],[21,"Nørgaard",3,9,49,0,0,0.1,"i"],[209,"Johnson",3,9,59,3,1,0.1,"a"],[226,"Pickford",1,9,55,11,3.7,8.6,"a"],[227,"Travers",1,9,50,0,0,0,"a"],[228,"King",1,9,45,0,0,0,"a"],[229,"Tarkowski",2,9,60,21,7,11.3,"a"],[230,"Branthwaite",2,9,55,13,4.3,1.9,"a"],[231,"Keane",2,9,49,0,0,0.9,"a"],[232,"O'Brien",2,9,49,0,0,0.3,"a"],[233,"Mykolenko",2,9,45,11,3.7,1.9,"a"],[236,"Dewsbury-Hall",3,9,65,15,5,4.5,"a"],[238,"Grealish",3,9,65,2,0.7,0.4,"a"],[239,"Garner",3,9,60,4,1.3,0.1,"d"],[242,"George",3,9,55,15,5,0.4,"a"],[243,"Alcaraz",3,9,50,1,0.3,0.1,"a"],[244,"Armstrong",3,9,50,11,3.7,0.4,"a"],[245,"Dibling",3,9,54,0,0,0,"a"],[246,"Röhl",3,9,50,6,2,0.1,"a"],[247,"Hackney",3,9,55,8,2.7,0.2,"a"],[249,"Barry",4,9,56,12,4,5.5,"a"],[649,"Maitland-Niles",2,9,45,7,7,0.1,"a"],[654,"Graham",3,9,45,0,0,0.1,"a"],[250,"Leno",1,10,45,6,2,3,"a"],[251,"Lecomte",1,10,40,0,0,1.2,"a"],[253,"Andersen",2,10,50,2,0.7,0.1,"a"],[254,"Robinson",2,10,45,4,1.3,1.5,"a"],[255,"J.Cuenca",2,10,45,3,1,0,"a"],[256,"Tete",2,10,45,0,0,0.2,"a"],[257,"Bassey",2,10,45,3,1,0.7,"a"],[258,"Castagne",2,10,45,13,4.3,0.9,"a"],[261,"Iwobi",3,10,55,6,2,0.8,"a"],[262,"Smith Rowe",3,10,54,2,0.7,0.3,"a"],[263,"Kevin",3,10,54,2,0.7,0,"a"],[264,"Bobb",3,10,55,7,2.3,0.3,"a"],[265,"Berge",3,10,50,5,1.7,0.3,"a"],[266,"Cairney",3,10,50,0,0,0,"i"],[268,"King",3,10,55,19,6.3,1,"a"],[269,"Sessegnon",2,10,45,3,1,0.3,"a"],[270,"Reed",3,10,45,0,0,1.2,"a"],[271,"Muniz",4,10,54,2,0.7,0.5,"a"],[272,"Kusi-Asare",4,10,45,0,0,6.3,"a"],[569,"Gonzalo",4,10,60,10,3.3,4.3,"a"],[570,"Palacios",3,10,55,11,3.7,0.2,"a"],[580,"Charles",3,10,50,4,1.3,0.1,"a"],[610,"De Fougerolles",2,10,40,0,0,0.1,"d"],[626,"Zepa",3,10,45,0,0,0.4,"a"],[635,"Larsson",3,10,50,1,1,0,"a"],[636,"Ángel",3,10,50,0,0,0,"a"],[650,"Affengruber",2,10,45,0,0,0,"a"],[240,"Iroegbunam",3,11,50,1,0.3,0,"a"],[273,"Phillips",1,11,40,0,0,1.5,"a"],[274,"Butland",1,11,45,0,0,0.1,"i"],[277,"Egan",2,11,41,23,7.7,6.2,"a"],[278,"Hughes",2,11,40,0,0,0.1,"i"],[279,"Ajayi",2,11,41,25,8.3,11.1,"a"],[280,"Coyle",2,11,40,12,4,0.5,"a"],[282,"Giles",2,11,40,20,6.7,1.3,"a"],[284,"McCarthy",2,11,40,0,0,0.1,"a"],[285,"McNair",2,11,40,1,0.3,0.1,"a"],[286,"Belloumi",3,11,50,14,4.7,0.9,"a"],[288,"Dowell",3,11,45,0,0,0.4,"a"],[289,"Crooks",3,11,45,2,0.7,0.5,"a"],[290,"Slater",3,11,45,11,3.7,5.1,"a"],[291,"Matazo",3,11,45,0,0,0,"i"],[292,"Ömür",3,11,49,0,0,0,"a"],[294,"Zambrano",3,11,45,0,0,0.1,"a"],[295,"McBurnie",4,11,55,8,2.7,2,"a"],[296,"Akintola",3,11,50,0,0,0,"a"],[297,"Gyabi",3,11,45,0,0,0,"i"],[340,"Gelhardt",3,11,50,0,0,0,"a"],[556,"Targett",2,11,40,1,0.3,2,"a"],[563,"Morita",3,11,50,1,0.3,0,"a"],[572,"Tzolakis",1,11,46,26,8.7,9.2,"a"],[574,"Hjertø-Dahl",3,11,49,1,0.3,0.1,"a"],[576,"Stroud",3,11,50,6,2,0.1,"a"],[585,"Herrington",2,11,40,3,1,0.6,"a"],[586,"Mendy",2,11,40,24,8,7.1,"a"],[589,"Gourna-Douath",3,11,50,3,1,0,"a"],[617,"Cho",3,11,50,2,1,0,"a"],[632,"Ansah",4,11,50,0,0,0,"a"],[637,"Vaz",4,11,50,0,0,0,"a"],[638,"Norton-Cuffy",2,11,40,1,1,0.2,"a"],[642,"Thomas",3,11,55,1,1,0,"a"],[645,"Mouzakitis",3,11,50,0,0,0,"a"],[259,"Diop",2,12,40,7,2.3,14.9,"a"],[267,"Lukić",3,12,50,8,2.7,0.1,"a"],[300,"Walton",1,12,45,0,0,0.4,"a"],[301,"Palmer",1,12,40,0,0,4.2,"a"],[302,"Button",1,12,40,0,0,0.5,"a"],[303,"Kipré",2,12,40,0,0,0.5,"a"],[304,"O'Shea",2,12,40,7,2.3,3.1,"a"],[305,"Davis",2,12,40,9,3,5.1,"a"],[306,"Greaves",2,12,40,2,0.7,1.2,"a"],[308,"Furlong",2,12,40,1,0.3,0.5,"a"],[309,"Núñez",3,12,50,6,2,0.1,"a"],[310,"Matusiwa",3,12,49,0,0,0,"i"],[312,"Taylor",3,12,45,0,0,0,"i"],[313,"Clarke",3,12,55,8,2.7,0.2,"a"],[315,"Fatawu",3,12,55,8,2.7,0.2,"a"],[316,"Emersonn",4,12,55,12,4,1.7,"a"],[318,"Philogene",3,12,54,0,0,0.1,"i"],[320,"Akpom",4,12,50,6,2,1.1,"a"],[321,"Walle Egeli",4,12,45,1,0.3,3.4,"a"],[323,"McAteer",3,12,45,3,1,1.2,"a"],[324,"Mehmeti",3,12,49,0,0,0,"a"],[562,"Maeda",3,12,54,6,2,0.3,"a"],[564,"Scherpen",1,12,45,6,2,0.6,"a"],[571,"Florentino",3,12,49,0,0,0.1,"a"],[591,"Enciso",3,12,55,11,3.7,0.8,"a"],[592,"Ouattara",2,12,40,3,1,0.9,"a"],[619,"Palacios",3,12,50,5,2.5,0,"a"],[640,"Flemming",4,12,55,1,1,0,"a"],[260,"Wilson",3,13,64,4,1.3,3.3,"a"],[327,"Bijol",2,13,50,12,4,0.9,"a"],[329,"Rodon",2,13,44,7,2.3,1.7,"i"],[330,"Bogle",2,13,45,22,7.3,1.4,"a"],[331,"Gudmundsson",2,13,45,2,0.7,0.1,"a"],[332,"Justin",2,13,45,16,5.3,1.5,"a"],[334,"Muharemović",2,13,50,14,4.7,3.4,"a"],[335,"Stach",3,13,60,19,6.3,2.8,"a"],[336,"Okafor",3,13,59,6,2,0.3,"a"],[337,"Aaronson",3,13,54,5,1.7,0.6,"a"],[338,"Ampadu",3,13,55,9,3,1.1,"a"],[339,"Longstaff",3,13,49,1,0.3,0.1,"a"],[343,"James",3,13,50,1,0.3,0.1,"a"],[344,"Gruev",3,13,50,0,0,0,"d"],[345,"Tanaka",3,13,49,6,2,0.2,"a"],[346,"Calvert-Lewin",4,13,60,10,3.3,24,"a"],[347,"Nmecha",4,13,54,5,1.7,0.5,"a"],[349,"Mateo Joseph",4,13,45,0,0,0.1,"i"],[385,"Trafford",1,13,50,15,5,5.4,"a"],[598,"Elvedi",2,13,45,5,1.7,0,"a"],[603,"Lienou",2,13,40,0,0,0.1,"a"],[604,"Cresswell",3,13,45,0,0,0.1,"a"],[625,"Cairns",1,13,40,0,0,0.2,"a"],[629,"Zetterer",1,13,40,0,0,0.4,"a"],[641,"Bard",2,13,45,0,0,0,"a"],[648,"Bahoya",3,13,50,0,0,0,"a"],[350,"A.Becker",1,14,55,10,3.3,3.8,"a"],[351,"Mamardashvili",1,14,49,0,0,0.1,"a"],[352,"Woodman",1,14,40,0,0,1.1,"a"],[354,"Jaros",1,14,40,0,0,0,"i"],[355,"Davies",1,14,40,0,0,0.2,"a"],[356,"Virgil",2,14,65,9,3,17.3,"a"],[357,"Frimpong",2,14,54,1,0.3,2.5,"a"],[358,"Kerkez",2,14,54,6,2,2.8,"a"],[359,"Gomez",2,14,50,0,0,0,"i"],[360,"Bradley",2,14,50,0,0,0,"i"],[361,"Lucky",2,14,40,0,0,0.1,"a"],[362,"Jacquet",2,14,50,9,3,2.7,"a"],[363,"Leoni",2,14,40,0,0,0,"i"],[364,"Tsimikas",2,14,49,1,0.3,0.1,"a"],[366,"Wirtz",3,14,74,9,3,8.4,"a"],[367,"Gakpo",3,14,72,28,9.3,14.4,"a"],[368,"Szoboszlai",3,14,70,15,5,38.5,"a"],[369,"Ngumoha",3,14,58,3,1,0.6,"a"],[370,"Chiesa",3,14,54,0,0,0.1,"i"],[371,"Gravenberch",3,14,59,7,2.3,1.4,"a"],[372,"Mac Allister",3,14,54,5,1.7,1.4,"a"],[374,"Endo",3,14,50,0,0,0.1,"a"],[375,"Nyoni",3,14,49,2,0.7,0,"a"],[377,"Munoz",3,14,65,13,4.3,1.2,"a"],[378,"McConnell",3,14,45,0,0,0.2,"a"],[379,"Isak",4,14,91,23,7.7,20.5,"a"],[380,"Ekitiké",4,14,74,0,0,0.1,"i"],[381,"Koumas",3,14,50,2,0.7,0,"a"],[382,"Danns",4,14,45,0,0,0.1,"a"],[579,"Araujo",2,14,54,9,3,2.3,"a"],[627,"Barcola",3,14,80,1,1,1.8,"a"],[155,"Enzo",3,15,69,4,1.3,3.2,"a"],[237,"Ndiaye",3,15,59,16,5.3,10.1,"a"],[384,"Donnarumma",1,15,55,10,3.3,7.7,"a"],[386,"Bettinelli",1,15,45,0,0,0,"a"],[387,"O'Reilly",2,15,65,4,1.3,15.1,"d"],[388,"Guéhi",2,15,60,20,6.7,18.6,"a"],[389,"Matheus N.",2,15,59,1,0.3,1,"a"],[390,"Rúben",2,15,55,10,3.3,1.8,"a"],[391,"Gvardiol",2,15,56,22,7.3,19.9,"a"],[392,"Aït-Nouri",2,15,53,0,0,0.5,"a"],[393,"Khusanov",2,15,55,9,3,1.6,"a"],[395,"Lewis",2,15,45,1,0.3,0.2,"a"],[396,"Vitor Reis",2,15,45,1,0.3,0,"a"],[397,"Semenyo",3,15,84,13,4.3,18,"a"],[398,"Foden",3,15,70,11,3.7,4.8,"a"],[399,"Cherki",3,15,78,25,8.3,30.3,"a"],[400,"Doku",3,15,74,0,0,0.8,"i"],[406,"Kovačić",3,15,54,2,0.7,0.1,"a"],[411,"Haaland",4,15,155,24,8,71.2,"a"],[481,"Anderson",3,15,63,8,2.7,4.6,"a"],[587,"Rulli",1,15,50,0,0,0,"a"],[616,"Bouaddi",3,15,55,2,1,0.1,"a"],[621,"McAidoo",3,15,45,2,1,0.1,"a"],[622,"Braithwaite",2,15,40,1,0.5,0.2,"a"],[628,"Allan",3,15,60,0,0,0,"a"],[653,"Samba",3,15,45,0,0,0,"a"],[43,"Tielemans",3,16,59,8,2.7,1.8,"a"],[131,"Baleba",3,16,50,0,0,0.1,"i"],[162,"Andrey Santos",3,16,49,4,1.3,0.7,"a"],[325,"Darlow",1,16,45,0,0,0,"a"],[412,"Lammens",1,16,50,5,1.7,12.4,"a"],[414,"Heaton",1,16,40,0,0,0.1,"i"],[415,"Dorgu",3,16,58,2,0.7,0.7,"a"],[416,"De Ligt",2,16,50,0,0,0,"i"],[417,"Dalot",2,16,49,4,1.3,2,"a"],[418,"Maguire",2,16,49,7,2.3,12.4,"a"],[419,"Martinez",2,16,50,4,1.3,1.2,"a"],[420,"Yoro",2,16,49,2,0.7,0.5,"a"],[421,"Heaven",2,16,44,1,0.3,0.3,"a"],[422,"Mazraoui",2,16,45,3,1,0.6,"a"],[423,"Shaw",2,16,44,7,2.3,14,"a"],[424,"Amass",2,16,40,0,0,0.2,"a"],[426,"B.Fernandes",3,16,120,27,9,46.3,"a"],[427,"Mbeumo",3,16,79,21,7,25.6,"a"],[428,"Cunha",3,16,79,14,4.7,7.1,"a"],[429,"Rashford",3,16,70,6,2,1.6,"a"],[430,"Mount",3,16,54,0,0,0,"a"],[431,"Amad",3,16,58,0,0,0.4,"i"],[432,"Mainoo",3,16,55,14,4.7,1.3,"a"],[433,"Ugarte",3,16,50,0,0,0,"i"],[434,"J.Fletcher",3,16,50,0,0,0,"a"],[435,"Lacey",3,16,49,1,0.3,0.1,"a"],[437,"Bendito Mantato",3,16,45,0,0,0.2,"a"],[438,"Fletcher",3,16,45,0,0,0.3,"a"],[439,"Šeško",4,16,70,7,2.3,1.6,"a"],[440,"Zirkzee",4,16,54,0,0,0.4,"a"],[441,"Obi",4,16,45,0,0,1.2,"a"],[405,"N.Gonzalez",3,17,55,4,1.3,0.3,"a"],[442,"Pope",1,17,49,0,0,1.1,"a"],[443,"Gillespie",1,17,45,0,0,0,"a"],[444,"Jaouen",1,17,45,0,0,0,"a"],[445,"Thiaw",2,17,50,8,2.7,2.1,"a"],[446,"Schär",2,17,50,1,0.3,0.2,"a"],[447,"Botman",2,17,50,9,3,0.7,"a"],[448,"Burn",2,17,49,0,0,1,"i"],[449,"Hall",2,17,51,18,6,11.7,"a"],[450,"Livramento",2,17,49,1,0.3,0,"a"],[453,"Barnes",3,17,60,17,5.7,1.9,"a"],[454,"Elanga",3,17,61,18,6,11,"a"],[456,"J.Ramsey",3,17,49,7,2.3,0.3,"a"],[457,"J.Murphy",3,17,59,2,0.7,0.1,"a"],[458,"Joelinton",3,17,54,0,0,0,"i"],[459,"L.Miley",3,17,55,8,2.7,0.1,"a"],[460,"Willock",3,17,50,11,3.7,0.5,"a"],[461,"Touré",3,17,59,1,0.3,0.1,"a"],[462,"Steur",3,17,49,3,1,0.1,"a"],[464,"Wissa",4,17,62,13,4.3,17,"a"],[465,"Osula",4,17,59,4,1.3,0.4,"i"],[559,"Bamba",3,17,49,1,0.3,0.1,"a"],[567,"Horníček",1,17,50,10,3.3,1.3,"a"],[593,"Dedić",2,17,45,13,4.3,3.6,"a"],[609,"Shahar",2,17,40,0,0,0.3,"a"],[634,"Fernandez-Pardo",4,17,60,1,1,0.1,"a"],[167,"Delap",4,18,55,3,1,0.8,"a"],[201,"Muñoz",2,18,54,1,0.3,6,"a"],[467,"Sels",1,18,50,9,3,1.4,"a"],[468,"John",1,18,45,0,0,0.1,"a"],[469,"N.Williams",2,18,50,15,5,8.3,"a"],[471,"Milenković",2,18,55,12,4,1.6,"a"],[472,"Murillo",2,18,55,13,4.3,1.6,"a"],[473,"Aina",2,18,45,6,2,2.8,"a"],[474,"Jair Cunha",2,18,45,10,3.3,0.2,"a"],[475,"Savona",2,18,45,0,0,0,"i"],[476,"O.Richards",2,18,40,0,0,0.2,"a"],[478,"Netz",2,18,45,2,0.7,0,"a"],[480,"Gibbs-White",3,18,79,18,6,9.4,"a"],[482,"Hudson-Odoi",3,18,59,1,0.3,0.2,"a"],[483,"Ndoye",3,18,55,13,4.3,0.7,"a"],[486,"McAtee",3,18,55,7,2.3,0.1,"a"],[487,"Dominguez",3,18,49,1,0.3,0.1,"a"],[488,"I.Sangaré",3,18,49,2,0.7,0.6,"a"],[489,"Yates",3,18,45,0,0,1.4,"a"],[490,"Wood",4,18,59,2,0.7,1.1,"a"],[491,"Igor Jesus",4,18,59,4,1.3,2.7,"a"],[493,"Kalimuendo",4,18,54,1,0.3,0.1,"a"],[558,"Schlager",3,18,50,8,2.7,0.1,"a"],[581,"Diomande",2,18,54,1,0.3,0.6,"a"],[590,"Benda",1,18,45,0,0,0.1,"a"],[112,"Van Hecke",2,19,49,10,3.3,7,"a"],[147,"Tosin",2,19,44,0,0,0.2,"a"],[401,"Marmoush",4,19,70,4,1.3,2.2,"a"],[403,"Sávio",3,19,65,3,1,0.7,"a"],[455,"Tonali",3,19,54,9,3,2.7,"a"],[495,"Austin",1,19,40,0,0,1,"a"],[496,"Kinsky",1,19,45,9,3,18.7,"a"],[497,"Dubravka",1,19,40,0,0,17.9,"a"],[498,"Senesi",2,19,59,3,1,4.9,"a"],[499,"Pedro Porro",2,19,55,8,2.7,11.4,"a"],[502,"Robertson",2,19,45,6,2,2.9,"a"],[503,"Van de Ven",2,19,50,9,3,3.8,"a"],[506,"Udogie",2,19,45,7,2.3,0.4,"a"],[508,"Davies",2,19,40,0,0,0.9,"a"],[509,"Byfield",2,19,40,0,0,0.1,"a"],[510,"Rowswell",2,19,40,0,0,0.1,"a"],[512,"Kudus",3,19,65,2,0.7,0.1,"a"],[513,"Xavi",3,19,60,0,0,0,"i"],[514,"Tel",3,19,59,7,2.3,0.3,"a"],[515,"Maddison",3,19,64,1,0.3,0.5,"d"],[516,"Bentancur",3,19,55,8,2.7,0.2,"a"],[517,"Odobert",3,19,55,0,0,0,"i"],[519,"Gallagher",3,19,54,3,1,0.2,"a"],[520,"Bergvall",3,19,54,1,0.3,0.2,"a"],[521,"Kulusevski",3,19,65,0,0,0,"i"],[522,"Gray",3,19,50,4,1.3,0.2,"a"],[524,"Olusesi",3,19,45,0,0,0.7,"a"],[525,"Fernandes",3,19,59,3,1,1,"a"],[526,"Solanke",4,19,59,3,1,1,"a"],[578,"Mudryk",3,19,54,1,0.3,0.1,"a"],[601,"Williams-Barnett",3,19,45,0,0,0.1,"a"],[501,"Danso",2,20,50,2,0.7,0.2,"a"],[529,"Roefs",1,20,50,9,3,3.1,"a"],[531,"Ellborg",1,20,45,0,0,0.1,"a"],[532,"Ballard",2,20,49,12,4,3.5,"a"],[533,"Mukiele",2,20,55,13,4.3,2.3,"a"],[534,"Hume",2,20,45,9,3,4.6,"a"],[535,"Alderete",2,20,49,1,0.3,0.3,"a"],[536,"Reinildo",2,20,45,9,3,0.4,"a"],[539,"O'Nien",2,20,40,1,0.3,2.8,"a"],[541,"Meunier",2,20,45,9,3,0.3,"a"],[542,"E.Le Fée",3,20,59,13,4.3,5.1,"a"],[543,"Diarra",3,20,54,5,1.7,0,"i"],[544,"Xhaka",3,20,55,18,6,4.4,"a"],[545,"Sadiki",3,20,50,6,2,0.3,"a"],[547,"Mundle",3,20,49,1,0.3,0,"a"],[548,"Rigg",3,20,49,2,0.7,0.1,"a"],[549,"Talbi",3,20,54,1,0.3,0.2,"a"],[550,"Jocelin.T",3,20,50,0,0,0,"a"],[551,"N.Angulo",3,20,50,10,3.3,0.1,"a"],[552,"Brobbey",4,20,59,6,2,7.9,"a"],[553,"Isidor",4,20,55,13,4.3,1.4,"a"],[612,"Methalie",2,20,45,0,0,0,"a"],[613,"Ahoka",3,20,45,0,0,0.2,"a"],[646,"Fofana",3,20,55,1,1,0,"a"],[651,"J.Angulo",4,20,45,0,0,0.4,"a"]]};</script>
+<script>
+(function(){
+"use strict";
+
+/* ================= constants ================= */
+var POS   = {1:"GKP",2:"DEF",3:"MID",4:"FWD"};
+var POSLONG = {1:"Goalkeepers",2:"Defenders",3:"Midfielders",4:"Forwards"};
+var SQUAD = {1:2,2:5,3:5,4:3};          // full FPL squad shape
+var BUDGET = 1000;                       // £100.0m in FPL tenths
+var MAXCLUB = 3;
+var FORMS = {"3-4-3":[3,4,3],"3-5-2":[3,5,2],"4-4-2":[4,4,2],"4-3-3":[4,3,3],
+             "4-5-1":[4,5,1],"5-2-3":[5,2,3],"5-3-2":[5,3,2],"5-4-1":[5,4,1]};
+var KITS = {
+  ARS:["#EF0107","#FFFFFF"], AVL:["#670E36","#95BFE5"], BOU:["#DA291C","#000000"],
+  BRE:["#E30613","#FFFFFF"], BHA:["#0057B8","#FFFFFF"], CHE:["#034694","#FFFFFF"],
+  COV:["#7BD3F0","#1D1D48"], CRY:["#1B458F","#C4122E"], EVE:["#003399","#FFFFFF"],
+  FUL:["#F2F2F2","#151515"], HUL:["#F5A12D","#151515"], IPS:["#3A64A3","#FFFFFF"],
+  LEE:["#F5F5F5","#1D428A"], LIV:["#C8102E","#F6EB61"], MCI:["#6CABDD","#FFFFFF"],
+  MUN:["#DA291C","#FBE122"], NEW:["#2B2B2B","#FFFFFF"], NFO:["#DD0000","#FFFFFF"],
+  TOT:["#F5F5F5","#132257"], SUN:["#EB172B","#FFFFFF"]
+};
+
+/* ================= data ================= */
+var D = window.FPL;
+var TEAM = {}, P = {}, ALL = [];
+D.teams.forEach(function(t){ TEAM[t[0]] = {id:t[0], sh:t[1], name:t[2]}; });
+D.players.forEach(function(r){
+  var p = {id:r[0], n:r[1], pos:r[2], team:r[3], cost:r[4], pts:r[5], form:r[6], sel:r[7], st:r[8]};
+  P[p.id] = p; ALL.push(p);
+});
+var MINCOST = {};
+[1,2,3,4].forEach(function(k){
+  MINCOST[k] = ALL.filter(function(p){return p.pos===k;}).reduce(function(m,p){return Math.min(m,p.cost);},999);
+});
+
+/* ================= helpers ================= */
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function money(t){ return "£" + (t/10).toFixed(1) + "m"; }
+function pct(n){ return (Math.round(n*10)/10).toFixed(n>=99.95?0:1) + "%"; }
+function rid(n){ var s="", a="abcdefghjkmnpqrstuvwxyz23456789"; for(var i=0;i<(n||6);i++) s+=a[Math.floor(Math.random()*a.length)]; return s; }
+var toastTimer;
+function toast(msg){
+  var t = $("toast"); t.textContent = msg; t.classList.add("on");
+  clearTimeout(toastTimer); toastTimer = setTimeout(function(){ t.classList.remove("on"); }, 2200);
+}
+function lsGet(k,d){ try{ var v=localStorage.getItem(k); return v?JSON.parse(v):d; }catch(e){ return d; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+
+/* ================= assets =================
+   Every graphic is drawn in code until real files arrive. To use real
+   artwork, put an image source against the club's three-letter code and
+   that club switches over — no layout or CSS changes anywhere else.
+   In this hosted page a source must be a data: URI (the page cannot load
+   an image from another server); in the deployed app it can be a normal
+   path such as "/kits/ARS.png". Anything left out keeps the drawn shirt,
+   so a half-finished set is fine. */
+var ASSETS = {
+  kit:   {},    // ARS: "data:image/png;base64,..."  shirt, transparent, ~256x248
+  badge: {},    // ARS: "data:image/png;base64,..."  club badge, square
+  logo:  null   // your channel logo, shown in the top bar
+};
+window.CROWDXI_ASSETS = ASSETS;   // reachable from the console for quick trials
+
+function teamMark(teamId, size){
+  if(!teamId) return "";
+  var sh = TEAM[teamId].sh;
+  if(ASSETS.badge[sh]){
+    return '<img class="club-badge" src="' + ASSETS.badge[sh] + '" alt="' + esc(TEAM[teamId].name) + '"' +
+      (size ? ' style="width:' + size + 'px;height:' + size + 'px"' : "") + '>';
+  }
+  return sh;
+}
+
+function kitSVG(teamId, cls){
+  var k = teamId ? KITS[TEAM[teamId].sh] : null;
+  if(teamId && ASSETS.kit[TEAM[teamId].sh]){
+    return '<img class="' + (cls||"kit") + '" src="' + ASSETS.kit[TEAM[teamId].sh] +
+           '" alt="' + esc(TEAM[teamId].name) + ' shirt">';
+  }
+  var a = k ? k[0] : "#B9B1C9", b = k ? k[1] : "#E6E1EE";
+  return '<svg class="' + (cls||"kit") + '" viewBox="0 0 64 62" aria-hidden="true">' +
+    '<path d="M20 6 C24 12 40 12 44 6 L56 11 L62 26 L50 31 L50 57 C42 59.5 22 59.5 14 57 L14 31 L2 26 L8 11 Z" ' +
+      'fill="' + a + '" stroke="rgba(0,0,0,.28)" stroke-width="1.4"/>' +
+    '<path d="M20 6 C24 12 40 12 44 6 L40 4 C36 8 28 8 24 4 Z" fill="' + b + '" stroke="rgba(0,0,0,.18)" stroke-width="1"/>' +
+    '<path d="M14 31 L2 26 L4.5 20 L14 24 Z M50 31 L62 26 L59.5 20 L50 24 Z" fill="' + b + '" opacity=".85"/>' +
+    '</svg>';
+}
+
+/* ================= squad model ================= */
+function newSquad(){
+  return { formation:"4-4-2", p:{1:[null,null],2:[null,null,null,null,null],
+           3:[null,null,null,null,null],4:[null,null,null]}, c:null, v:null };
+}
+function startCount(sq){ var f = FORMS[sq.formation]; return {1:1,2:f[0],3:f[1],4:f[2]}; }
+function squadIds(sq){ var out=[]; [1,2,3,4].forEach(function(k){ sq.p[k].forEach(function(id){ if(id) out.push(id); }); }); return out; }
+function xiIds(sq){
+  var sc = startCount(sq), out=[];
+  [1,2,3,4].forEach(function(k){ for(var i=0;i<sc[k];i++){ if(sq.p[k][i]) out.push(sq.p[k][i]); } });
+  return out;
+}
+function benchIds(sq){
+  var sc = startCount(sq), out=[];
+  [1,2,3,4].forEach(function(k){ for(var i=sc[k];i<SQUAD[k];i++){ if(sq.p[k][i]) out.push(sq.p[k][i]); } });
+  return out;
+}
+function spent(sq){ return squadIds(sq).reduce(function(s,id){ return s + P[id].cost; }, 0); }
+function clubCount(sq){
+  var c = {}; squadIds(sq).forEach(function(id){ c[P[id].team] = (c[P[id].team]||0)+1; }); return c;
+}
+function emptySlots(sq){
+  var e = {1:0,2:0,3:0,4:0};
+  [1,2,3,4].forEach(function(k){ sq.p[k].forEach(function(id){ if(!id) e[k]++; }); });
+  return e;
+}
+/* money still needed to fill every remaining empty slot at the cheapest price */
+function reserve(sq, ignorePos){
+  var e = emptySlots(sq), r = 0;
+  [1,2,3,4].forEach(function(k){ var n = e[k] - (k===ignorePos?1:0); if(n>0) r += n*MINCOST[k]; });
+  return r;
+}
+function validate(sq, budgetOn){
+  var errs = [];
+  if(squadIds(sq).length < 15) errs.push("Pick all 15 players (" + squadIds(sq).length + "/15 done).");
+  if(budgetOn && spent(sq) > BUDGET) errs.push("You are " + money(spent(sq)-BUDGET) + " over the budget.");
+  var cc = clubCount(sq), over = [];
+  for(var t in cc){ if(cc[t] > MAXCLUB) over.push(TEAM[t].name); }
+  if(over.length) errs.push("Max 3 players per club — too many from " + over.join(", ") + ".");
+  var xi = xiIds(sq);
+  if(!sq.c || xi.indexOf(sq.c) < 0) errs.push("Choose a captain from your starting XI.");
+  if(!sq.v || xi.indexOf(sq.v) < 0) errs.push("Choose a vice-captain from your starting XI.");
+  if(sq.c && sq.c === sq.v) errs.push("Captain and vice-captain must be different players.");
+  return errs;
+}
+
+/* ================= app state ================= */
+var db = null, S = {
+  view:"home", poolId:null, pool:null, entries:[], sq:newSquad(),
+  picking:null, filterPos:0, filterTeam:0, sort:"sel", q:"", submitted:false,
+  sim:0, unsub:null, dbReady:false
+};
+
+/* ================= crowd maths ================= */
+function tally(entries){
+  var xi={}, sqd={}, cap={}, vic={}, n=entries.length;
+  entries.forEach(function(e){
+    (e.xi||[]).forEach(function(id){ xi[id]=(xi[id]||0)+1; sqd[id]=(sqd[id]||0)+1; });
+    (e.bench||[]).forEach(function(id){ sqd[id]=(sqd[id]||0)+1; });
+    if(e.c) cap[e.c]=(cap[e.c]||0)+1;
+    if(e.v) vic[e.v]=(vic[e.v]||0)+1;
+  });
+  return {xi:xi, sqd:sqd, cap:cap, vic:vic, n:n};
+}
+function ranked(counts, n, posKey){
+  var out = [];
+  for(var id in counts){
+    var p = P[id]; if(!p) continue;
+    if(posKey && p.pos !== posKey) continue;
+    out.push({id:+id, p:p, c:counts[id], pct:n ? counts[id]*100/n : 0});
+  }
+  out.sort(function(a,b){ return b.c - a.c || b.p.sel - a.p.sel || a.p.n.localeCompare(b.p.n); });
+  return out;
+}
+/* the crowd XI: highest-voted players that still make a legal formation */
+function crowdXI(t){
+  var pools = {1:ranked(t.xi,t.n,1), 2:ranked(t.xi,t.n,2), 3:ranked(t.xi,t.n,3), 4:ranked(t.xi,t.n,4)};
+  var chosen = {1:[],2:[],3:[],4:[]}, used = {};
+  function take(k, howMany){
+    for(var i=0; i<pools[k].length && howMany>0; i++){
+      var r = pools[k][i]; if(used[r.id]) continue;
+      used[r.id]=1; chosen[k].push(r); howMany--;
+    }
+  }
+  take(1,1); take(2,3); take(3,2); take(4,1);          // legal minimum: 1-3-2-1
+  var caps = {2:5,3:5,4:3};
+  for(var slot=0; slot<4; slot++){                      // best remaining outfielders
+    var best = null, bk = 0;
+    [2,3,4].forEach(function(k){
+      if(chosen[k].length >= caps[k]) return;
+      for(var i=0;i<pools[k].length;i++){ var r=pools[k][i]; if(used[r.id]) continue;
+        if(!best || r.c > best.c){ best = r; bk = k; } break; }
+    });
+    if(!best) break;
+    used[best.id]=1; chosen[bk].push(best);
+  }
+  [2,3,4].forEach(function(k){ chosen[k].sort(function(a,b){ return b.c-a.c; }); });
+  var f = chosen[2].length + "-" + chosen[3].length + "-" + chosen[4].length;
+  var capr = ranked(t.cap, t.n)[0] || null, vicr = ranked(t.vic, t.n)[0] || null;
+  return {rows:chosen, formation:f, cap:capr, vice:vicr, used:used};
+}
+
+/* ================= simulated crowd (clearly labelled demo data) ================= */
+function weightedPick(list, taken, clubs, budgetLeft, slotsLeft){
+  var pool = list.filter(function(p){
+    if(taken[p.id]) return false;
+    if((clubs[p.team]||0) >= MAXCLUB) return false;
+    if(p.cost > budgetLeft - slotsLeft) return false;
+    return true;
+  });
+  if(!pool.length) return null;
+  var w = pool.map(function(p){ return Math.pow(p.sel + 0.35, 1.7) + 0.02; });
+  var sum = w.reduce(function(a,b){ return a+b; }, 0), r = Math.random()*sum;
+  for(var i=0;i<pool.length;i++){ r -= w[i]; if(r<=0) return pool[i]; }
+  return pool[pool.length-1];
+}
+function simulateEntry(){
+  var byPos = {1:[],2:[],3:[],4:[]};
+  ALL.forEach(function(p){ if(p.st==="a"||p.st==="d") byPos[p.pos].push(p); });
+  var taken={}, clubs={}, sq=newSquad(), left=BUDGET, need=15;
+  var order=[2,3,4,2,3,4,2,3,2,3,2,3,4,1,1];
+  var idx={1:0,2:0,3:0,4:0};
+  for(var i=0;i<order.length;i++){
+    var k = order[i];
+    need--;
+    var minRest = 0, e = {1:SQUAD[1]-idx[1],2:SQUAD[2]-idx[2],3:SQUAD[3]-idx[3],4:SQUAD[4]-idx[4]};
+    e[k]--; [1,2,3,4].forEach(function(z){ if(e[z]>0) minRest += e[z]*MINCOST[z]; });
+    var pick = weightedPick(byPos[k], taken, clubs, left - minRest + MINCOST[k], 0);
+    if(!pick){ pick = byPos[k].filter(function(p){ return !taken[p.id] && (clubs[p.team]||0)<MAXCLUB; })
+                 .sort(function(a,b){ return a.cost-b.cost; })[0]; }
+    if(!pick) return null;
+    taken[pick.id]=1; clubs[pick.team]=(clubs[pick.team]||0)+1;
+    sq.p[k][idx[k]++] = pick.id; left -= pick.cost;
+  }
+  var fkeys = ["3-4-3","3-5-2","4-4-2","4-3-3","4-5-1","5-3-2"];
+  var wts   = [   18,    16,    22,    20,    12,    12];
+  var tot = wts.reduce(function(a,b){return a+b;},0), r = Math.random()*tot, fi=0;
+  for(var j=0;j<wts.length;j++){ r -= wts[j]; if(r<=0){ fi=j; break; } }
+  sq.formation = fkeys[fi];
+  [1,2,3,4].forEach(function(k){                       // best players start
+    sq.p[k].sort(function(a,b){ return P[b].sel - P[a].sel; });
+  });
+  var xi = xiIds(sq);
+  var capPool = xi.filter(function(id){ return P[id].pos>=3; });
+  capPool.sort(function(a,b){ return P[b].sel - P[a].sel; });
+  var ci = Math.random()<0.55 ? 0 : (Math.random()<0.7 ? 1 : Math.floor(Math.random()*Math.min(4,capPool.length)));
+  var c = capPool[ci] || xi[10], v = capPool[(ci+1) % Math.max(1,capPool.length)] || xi[9];
+  return {nick:"Viewer " + rid(4), form:sq.formation, xi:xi, bench:benchIds(sq), c:c, v:v, demo:true};
+}
+function addSimulated(n){
+  var made = [];
+  for(var i=0;i<n;i++){ var e = simulateEntry(); if(e) made.push(e); }
+  S.entries = S.entries.concat(made);
+  S.sim += made.length;
+  render();
+}
+
+/* ================= persistence ================= */
+function poolKey(id){ return "cxi.pool." + id; }
+function entryKey(id){ return "cxi.entry." + id; }
+function localPools(){ return lsGet("cxi.pools", {}); }
+
+function savePool(pool){
+  var m = localPools(); m[pool.id] = pool; lsSet("cxi.pools", m);
+  if(db) db.doc("pools/" + pool.id).set(pool).catch(function(){});
+}
+function loadPool(id, cb){
+  var m = localPools();
+  if(m[id]) cb(m[id]);
+  if(db){
+    db.doc("pools/" + id).get().then(function(s){
+      if(s.exists){ var p = s.data(); p.id = id; var mm=localPools(); mm[id]=p; lsSet("cxi.pools",mm); cb(p); }
+      else if(!m[id]) cb(null);
+    }).catch(function(){ if(!m[id]) cb(null); });
+  } else if(!m[id]) cb(null);
+}
+function myEntryId(poolId){
+  var k = entryKey(poolId), v = lsGet(k, null);
+  if(!v){ v = rid(10); lsSet(k, v); }
+  return v;
+}
+function saveEntry(poolId, entry){
+  var key = "cxi.myentry." + poolId;
+  lsSet(key, entry);
+  if(db){
+    return db.doc("pools/" + poolId + "/entries/" + myEntryId(poolId)).set(entry);
+  }
+  var all = lsGet("cxi.entries." + poolId, {});
+  all[myEntryId(poolId)] = entry; lsSet("cxi.entries." + poolId, all);
+  return Promise.resolve();
+}
+function watchEntries(poolId){
+  if(S.unsub){ S.unsub(); S.unsub = null; }
+  if(db){
+    S.unsub = db.collection("pools/" + poolId + "/entries").onSnapshot(function(snap){
+      var real = snap.docs.map(function(d){ return d.data(); });
+      var demo = S.entries.filter(function(e){ return e.demo; });
+      S.entries = real.concat(demo);
+      render();
+    }, function(){ /* subscription ended; page keeps working on what it has */ });
+  } else {
+    var all = lsGet("cxi.entries." + poolId, {});
+    var real = Object.keys(all).map(function(k){ return all[k]; });
+    var demo = S.entries.filter(function(e){ return e.demo; });
+    S.entries = real.concat(demo);
+  }
+}
+
+/* ================= routing ================= */
+function parseHash(){
+  var h = (location.hash || "").replace(/^#\/?/, "");
+  var parts = h.split("/").filter(Boolean);
+  if(parts[0] === "p" && parts[1]) return {view: parts[2] === "live" ? "live" : "vote", poolId: parts[1]};
+  return {view:"home", poolId:null};
+}
+function go(hash){ location.hash = hash; }
+function onRoute(){
+  var r = parseHash();
+  S.view = r.view; S.poolId = r.poolId; S.picking = null;
+  if(!r.poolId){ S.pool = null; S.entries = []; if(S.unsub){S.unsub(); S.unsub=null;} render(); return; }
+  loadPool(r.poolId, function(p){
+    S.pool = p;
+    if(p){
+      var mine = lsGet("cxi.myentry." + r.poolId, null);
+      if(mine && S.view === "vote"){ S.submitted = true; S.sq = entryToSquad(mine); }
+      watchEntries(r.poolId);
+    }
+    render();
+  });
+  render();
+}
+function entryToSquad(e){
+  var sq = newSquad(); sq.formation = e.form || "4-4-2";
+  var idx = {1:0,2:0,3:0,4:0};
+  (e.xi||[]).forEach(function(id){ if(P[id]) sq.p[P[id].pos][idx[P[id].pos]++] = id; });
+  var sc = startCount(sq);
+  var bidx = {1:sc[1],2:sc[2],3:sc[3],4:sc[4]};
+  (e.bench||[]).forEach(function(id){ if(P[id]) sq.p[P[id].pos][bidx[P[id].pos]++] = id; });
+  sq.c = e.c; sq.v = e.v;
+  return sq;
+}
+
+/* the renderer lives in the next script; this is the shim it fills in */
+function render(){ if(window.__CXI && window.__CXI.render) window.__CXI.render(); }
+
+window.__CXI = {
+  POS:POS, POSLONG:POSLONG, SQUAD:SQUAD, BUDGET:BUDGET, MAXCLUB:MAXCLUB, FORMS:FORMS, KITS:KITS,
+  D:D, TEAM:TEAM, P:P, ALL:ALL, MINCOST:MINCOST, S:S,
+  $:$, esc:esc, money:money, pct:pct, rid:rid, toast:toast, lsGet:lsGet, lsSet:lsSet,
+  kitSVG:kitSVG, teamMark:teamMark, ASSETS:ASSETS,
+  newSquad:newSquad, startCount:startCount, squadIds:squadIds, xiIds:xiIds, benchIds:benchIds,
+  spent:spent, clubCount:clubCount, emptySlots:emptySlots, reserve:reserve, validate:validate,
+  tally:tally, ranked:ranked, crowdXI:crowdXI, addSimulated:addSimulated, simulateEntry:simulateEntry,
+  savePool:savePool, loadPool:loadPool, localPools:localPools, myEntryId:myEntryId,
+  saveEntry:saveEntry, watchEntries:watchEntries, entryToSquad:entryToSquad,
+  parseHash:parseHash, go:go, onRoute:onRoute, render:null,
+  setDb:function(x){ db = x; S.dbReady = !!x; }
+};
+})();
+</script>
+<script>
+(function(){
+"use strict";
+var G = window.__CXI;
+var POS=G.POS, POSLONG=G.POSLONG, SQUAD=G.SQUAD, BUDGET=G.BUDGET, MAXCLUB=G.MAXCLUB, FORMS=G.FORMS;
+var P=G.P, ALL=G.ALL, TEAM=G.TEAM, D=G.D, S=G.S;
+var esc=G.esc, money=G.money, pct=G.pct, kitSVG=G.kitSVG, toast=G.toast, $=G.$;
+var teamMark=G.teamMark;
+/* the channel logo replaces the dot as soon as one is supplied */
+function mark(){ return G.ASSETS.logo
+  ? '<img class="brandlogo" src="' + G.ASSETS.logo + '" alt="">'
+  : '<span class="dot"></span>'; }
+
+/* ---------- pitch pieces ---------- */
+function slotHTML(o){
+  // o: {id, pos, empty, sub, subClass, badge, key, dim}
+  var p = o.id ? P[o.id] : null;
+  return '<button class="slot' + (p?"":" empty") + '" data-act="' + (o.act||"") + '" data-key="' + (o.key||"") + '"' +
+    (o.title ? ' title="' + esc(o.title) + '"' : "") + '>' +
+    (o.badge ? '<span class="badge' + (o.badge==="V"?" v":"") + '">' + o.badge + '</span>' : "") +
+    kitSVG(p ? p.team : 0) +
+    '<span class="plate">' +
+      '<span class="nm">' + (p ? esc(p.n) : POS[o.pos]) + '</span>' +
+      '<span class="sub' + (o.subClass?" "+o.subClass:"") + '">' + (o.sub || "&nbsp;") + '</span>' +
+    '</span></button>';
+}
+function rowHTML(cells){ return '<div class="row">' + cells.join("") + '</div>'; }
+
+/* ---------- VOTE: the picking pitch ---------- */
+function pitchVote(){
+  var sq = S.sq, sc = G.startCount(sq), html = "";
+  [1,2,3,4].forEach(function(k){
+    var cells = [];
+    for(var i=0;i<sc[k];i++){
+      var id = sq.p[k][i];
+      cells.push(slotHTML({ id:id, pos:k, key:k+"-"+i, act:id?"slot":"fill",
+        sub: id ? money(P[id].cost) : "Add",
+        badge: id && id===sq.c ? "C" : (id && id===sq.v ? "V" : null) }));
+    }
+    html += rowHTML(cells);
+  });
+  var bench = [];
+  [1,2,3,4].forEach(function(k){
+    for(var i=sc[k];i<SQUAD[k];i++){
+      var id = sq.p[k][i];
+      bench.push(slotHTML({ id:id, pos:k, key:k+"-"+i, act:id?"slot":"fill",
+        sub: id ? money(P[id].cost) : "Add" }));
+    }
+  });
+  return '<div class="pitch">' + html + '</div>' +
+    '<div class="bench"><div class="benchlabel eyebrow">Bench &middot; substitutes in order</div>' + rowHTML(bench) + '</div>';
+}
+
+/* ---------- LIVE: the crowd pitch ---------- */
+function pitchCrowd(cx, t){
+  var html = "";
+  [1,2,3,4].forEach(function(k){
+    var cells = (cx.rows[k]||[]).map(function(r){
+      var badge = cx.cap && cx.cap.id===r.id ? "C" : (cx.vice && cx.vice.id===r.id ? "V" : null);
+      return slotHTML({ id:r.id, pos:k, sub:pct(r.pct), subClass:"pct", badge:badge,
+        title: r.p.n + " — picked in " + r.c + " of " + t.n + " starting XIs" });
+    });
+    if(!cells.length) cells = [slotHTML({pos:k, sub:"&mdash;"})];
+    html += rowHTML(cells);
+  });
+  return '<div class="pitch">' + html + '</div>';
+}
+
+/* ---------- player picker (rail) ---------- */
+function pickerHTML(){
+  var sq = S.sq, taken = {}, cc = G.clubCount(sq);
+  G.squadIds(sq).forEach(function(id){ taken[id]=1; });
+  var bank = BUDGET - G.spent(sq);
+  var wantPos = S.picking ? +S.picking.split("-")[0] : S.filterPos;
+  var list = ALL.filter(function(p){
+    if(wantPos && p.pos !== wantPos) return false;
+    if(S.filterTeam && p.team !== S.filterTeam) return false;
+    if(S.q && p.n.toLowerCase().indexOf(S.q.toLowerCase()) < 0) return false;
+    return true;
+  });
+  var sorters = {
+    sel:  function(a,b){ return b.sel-a.sel; },
+    pts:  function(a,b){ return b.pts-a.pts; },
+    form: function(a,b){ return b.form-a.form; },
+    cost: function(a,b){ return b.cost-a.cost; },
+    cheap:function(a,b){ return a.cost-b.cost; }
+  };
+  list.sort(sorters[S.sort] || sorters.sel);
+  list = list.slice(0, 120);
+
+  var rows = list.map(function(p){
+    var reason = "";
+    if(taken[p.id]) reason = "Already in your squad";
+    else if(!S.picking && !wantPos) reason = "";
+    if(S.picking){
+      var k = +S.picking.split("-")[0];
+      if(!taken[p.id]){
+        if((cc[p.team]||0) >= MAXCLUB) reason = "You already have 3 from " + TEAM[p.team].name;
+        else if(S.pool && S.pool.budget && p.cost > bank - G.reserve(sq, k)) reason = "Not enough money left for the rest of the squad";
+      }
+    }
+    var dis = !!reason || !!taken[p.id] || !S.picking;
+    return '<button class="prow" data-act="pick" data-id="' + p.id + '"' + (dis?" disabled":"") +
+      (reason?' title="' + esc(reason) + '"':"") + '>' +
+      kitSVG(p.team, "kit kitmini") +
+      '<span class="who"><span class="n">' + esc(p.n) + '</span>' +
+      '<span class="m">' + teamMark(p.team) + " &middot; " + POS[p.pos] + (p.st!=="a"?" &middot; doubt":"") + '</span></span>' +
+      '<span class="price">' + money(p.cost) + '</span>' +
+      '<span class="pts">' + p.pts + '</span></button>';
+  }).join("");
+
+  var head = S.picking
+    ? '<h3>Choose a ' + POS[+S.picking.split("-")[0]] + '</h3><button class="btn btn-sm btn-ghost" data-act="cancelpick">Cancel</button>'
+    : '<h3>Players</h3><span class="hint">Tap an empty shirt to pick</span>';
+
+  return '<section class="panel"><header>' + head + '</header>' +
+    '<div class="tools">' +
+      '<input type="search" data-act="q" placeholder="Search player" value="' + esc(S.q) + '">' +
+      (S.picking ? "" : '<select data-act="fpos"><option value="0">All positions</option>' +
+        [1,2,3,4].map(function(k){ return '<option value="'+k+'"' + (S.filterPos===k?" selected":"") + '>' + POSLONG[k] + '</option>'; }).join("") + '</select>') +
+      '<select data-act="fteam"><option value="0">All clubs</option>' +
+        D.teams.map(function(t){ return '<option value="'+t[0]+'"' + (S.filterTeam===t[0]?" selected":"") + '>' + esc(t[2]) + '</option>'; }).join("") + '</select>' +
+      '<select data-act="sort">' +
+        [["sel","Sort: ownership"],["pts","Sort: total points"],["form","Sort: form"],["cost","Sort: most expensive"],["cheap","Sort: cheapest"]]
+        .map(function(o){ return '<option value="'+o[0]+'"' + (S.sort===o[0]?" selected":"") + '>' + o[1] + '</option>'; }).join("") + '</select>' +
+    '</div>' +
+    '<div class="plist">' + (rows || '<div class="empty-note">No player matches that search.</div>') + '</div>' +
+    '</section>';
+}
+
+/* ---------- ranked crowd lists ---------- */
+function ranksHTML(t, cx){
+  var out = "";
+  var cap = G.ranked(t.cap, t.n).slice(0,6);
+  out += '<section class="panel"><header><h3>Captain vote</h3><span class="chip">' + t.n + ' voted</span></header>' +
+    (cap.length ? cap.map(function(r,i){
+      return '<div class="rank' + (i===0?" in":"") + '"><div class="top">' +
+        '<span class="pos">' + (i+1) + '</span><span class="nm">' + esc(r.p.n) + '</span>' +
+        '<span class="tm">' + teamMark(r.p.team) + '</span><span class="pc">' + pct(r.pct) + '</span></div>' +
+        '<div class="bar"><i style="width:' + Math.max(2,r.pct) + '%"></i></div></div>';
+    }).join("") : '<div class="empty-note">No captain votes yet.</div>') + '</section>';
+
+  out += '<section class="panel"><header><h3>Most picked</h3><span class="hint">share of starting XIs</span></header>';
+  [1,2,3,4].forEach(function(k){
+    var rows = G.ranked(t.xi, t.n, k).slice(0,7);
+    out += '<div class="grouphead"><span class="eyebrow">' + POSLONG[k] + '</span>' +
+      '<span class="hint">' + (cx.rows[k]||[]).length + ' in the XI</span></div>';
+    out += rows.length ? rows.map(function(r,i){
+      var inXI = !!(cx.rows[k]||[]).filter(function(x){ return x.id===r.id; }).length;
+      return '<div class="rank' + (inXI?" in":"") + '"><div class="top">' +
+        '<span class="pos">' + (i+1) + '</span><span class="nm">' + esc(r.p.n) + '</span>' +
+        '<span class="tm">' + teamMark(r.p.team) + '</span><span class="pc">' + pct(r.pct) + '</span></div>' +
+        '<div class="bar"><i style="width:' + Math.max(2,r.pct) + '%"></i></div></div>';
+    }).join("") : '<div class="empty-note">No votes yet.</div>';
+  });
+  out += '</section>';
+  return out;
+}
+
+/* ---------- views ---------- */
+function viewHome(){
+  var pools = G.localPools(), keys = Object.keys(pools);
+  var mine = keys.length ? '<section class="panel"><header><h3>Your pools</h3></header>' +
+    keys.map(function(k){ var p = pools[k];
+      return '<div class="rank"><div class="top"><span class="nm">' + esc(p.name) + '</span>' +
+        '<span class="tm">GW' + p.gw + '</span>' +
+        '<a class="btn btn-sm" href="#/p/' + k + '/live">Results</a>' +
+        '<a class="btn btn-sm" href="#/p/' + k + '">Team</a></div></div>'; }).join("") +
+    '</section>' : "";
+
+  return '<div class="topbar"><span class="brand">' + mark() + 'Crowd XI</span></div>' +
+  '<div class="home"><div class="hero"><div>' +
+    '<span class="eyebrow">Fantasy Premier League &middot; ' + esc(D.gwName) + '</span>' +
+    '<h1>Your viewers pick.<br><em>One XI</em> comes out.</h1>' +
+    '<p class="lede">Share one link with your audience. Every viewer builds a real FPL squad — £100.0m, 15 players, three per club. ' +
+    'Your results screen shows the team the crowd actually chose, with the percentage next to every shirt, updating live while you stream.</p>' +
+    '<div class="steps">' +
+      '<div class="step"><span class="n">1</span><span><b>Open a pool</b><span>Name it after the gameweek or the video.</span></span></div>' +
+      '<div class="step"><span class="n">2</span><span><b>Drop the link in your description or chat</b><span>Viewers pick a squad and a captain — no account needed.</span></span></div>' +
+      '<div class="step"><span class="n">3</span><span><b>Put the results screen on stream</b><span>Most-picked keeper, then defence, midfield, attack — and the armband goes to the top captain vote.</span></span></div>' +
+    '</div></div>' +
+    '<div class="panel formcard">' +
+      '<div class="field"><label for="pname">Pool name</label>' +
+        '<input type="text" id="pname" placeholder="' + esc(D.gwName) + ' — the people’s XI" value="' + esc(D.gwName) + ' — the people’s XI"></div>' +
+      '<div class="field"><label for="pnick">Your name (shown as the host)</label>' +
+        '<input type="text" id="pnick" placeholder="Your channel"></div>' +
+      '<label class="switch"><input type="checkbox" id="pbudget" checked>' +
+        '<span><b>Full FPL rules</b><span>£100.0m budget, 15 players, max 3 per club. Uncheck for a fast pool with no budget.</span></span></label>' +
+      '<button class="btn btn-primary" data-act="create">Create pool &rarr;</button>' +
+      '<p class="hint">Deadline for ' + esc(D.gwName) + ': ' + new Date(D.deadline).toLocaleString([], {weekday:"short", day:"numeric", month:"short", hour:"2-digit", minute:"2-digit"}) + '. Prices and players are the real FPL list.</p>' +
+    '</div>' +
+  '</div>' + (mine ? '<div style="margin-top:26px">' + mine + '</div>' : "") + '</div>';
+}
+
+function viewVote(){
+  if(!S.pool) return notFound();
+  var sq = S.sq, sp = G.spent(sq), bank = BUDGET - sp, n = G.squadIds(sq).length;
+  var errs = G.validate(sq, S.pool.budget);
+  var over = S.pool.budget && bank < 0;
+
+  var top = '<div class="topbar"><a class="brand" href="#/">' + mark() + 'Crowd XI</a>' +
+    '<span class="chip">' + esc(S.pool.name) + '</span><span class="spacer"></span>' +
+    (S.pool.budget ? '<span class="meter' + (over?" over":"") + '"><span class="eyebrow">Money left</span><b>' + money(bank) + '</b></span>' : "") +
+    '<span class="meter"><span class="eyebrow">Picked</span><b>' + n + '/15</b></span>' +
+    '<a class="btn btn-sm" href="#/p/' + S.poolId + '/live">Results</a></div>';
+
+  var banner = S.submitted ? '<div class="banner">Your team is in. Change it any time before the deadline — the crowd XI updates as you do.' +
+    '<a class="btn btn-sm" href="#/p/' + S.poolId + '/live">See the crowd XI</a></div>' : "";
+
+  var formSel = '<select data-act="formation">' + Object.keys(FORMS).map(function(f){
+      return '<option value="' + f + '"' + (sq.formation===f?" selected":"") + '>' + f + '</option>'; }).join("") + '</select>';
+
+  var cc = G.clubCount(sq), maxClub = 0, maxClubName = "";
+  for(var t in cc){ if(cc[t] > maxClub){ maxClub = cc[t]; maxClubName = TEAM[t].sh; } }
+
+  var pitchbar = '<div class="pitchbar"><span class="eyebrow">Formation</span>' + formSel +
+    '<span class="spacer" style="flex:1"></span>' +
+    (S.pool.budget ? '<span class="chip' + (over?" warn":"") + '">Squad ' + money(sp) + '</span>' : '<span class="chip">No budget</span>') +
+    (maxClub ? '<span class="chip' + (maxClub>MAXCLUB?" warn":"") + '">Max ' + maxClub + ' from ' + maxClubName + '</span>' : "") +
+    '</div>';
+
+  var submit = '<section class="panel"><header><h3>' + (S.submitted?"Update your team":"Send your team") + '</h3></header>' +
+    '<div class="panelbody">' +
+      (errs.length ? errs.map(function(e){ return '<div class="err">' + esc(e) + '</div>'; }).join("")
+                   : '<div class="chip good">Legal squad — ready to send</div>') +
+      '<div class="field"><label for="nick">Your name on the leaderboard</label>' +
+        '<input type="text" id="nick" placeholder="e.g. Sam from Leeds" value="' + esc(G.lsGet("cxi.nick","")) + '"></div>' +
+      '<button class="btn btn-primary" data-act="submit"' + (errs.length?" disabled":"") + '>' +
+        (S.submitted ? "Update my team" : "Submit my team") + '</button>' +
+      '<p class="hint">Tap a shirt to make that player captain, move them to the bench, or take them out.</p>' +
+    '</div></section>';
+
+  return top + banner + '<div class="shell"><div class="pitchwrap">' + pitchbar + pitchVote() + '</div>' +
+    '<div class="rail">' + submit + pickerHTML() + '</div></div>';
+}
+
+function viewLive(){
+  if(!S.pool) return notFound();
+  var t = G.tally(S.entries), cx = G.crowdXI(t);
+  var xiIds = [];
+  [1,2,3,4].forEach(function(k){ (cx.rows[k]||[]).forEach(function(r){ xiIds.push(r.id); }); });
+  var cost = xiIds.reduce(function(s,id){ return s + P[id].cost; }, 0);
+  var clubs = {}; xiIds.forEach(function(id){ clubs[P[id].team] = (clubs[P[id].team]||0)+1; });
+  var breach = Object.keys(clubs).filter(function(k){ return clubs[k] > MAXCLUB; })
+                     .map(function(k){ return clubs[k] + " from " + TEAM[k].sh; });
+  var topPick = G.ranked(t.xi, t.n)[0];
+  var link = location.href.replace(/#.*$/, "") + "#/p/" + S.poolId;
+
+  var top = '<div class="topbar"><a class="brand" href="#/">' + mark() + 'Crowd XI</a>' +
+    '<span class="chip">' + esc(S.pool.name) + '</span>' +
+    '<span class="chip live">Live</span><span class="spacer"></span>' +
+    '<span class="meter"><span class="eyebrow">Teams in</span><b>' + t.n + '</b></span>' +
+    '<a class="btn btn-sm" href="#/p/' + S.poolId + '">My team</a></div>';
+
+  var banner = S.sim ? '<div class="banner">Showing ' + S.sim + ' simulated viewers so you can see the screen working. These are made-up teams, not real votes.' +
+    '<button class="btn btn-sm" data-act="clearsim">Clear them</button></div>' : "";
+
+  var pitchbar = '<div class="pitchbar"><span class="eyebrow">The crowd XI</span>' +
+    '<span class="chip">' + (t.n ? cx.formation : "—") + '</span>' +
+    '<span style="flex:1"></span>' +
+    '<span class="chip">' + money(cost) + ' on the pitch</span>' +
+    (breach.length ? '<span class="chip warn">Breaks the 3-per-club rule: ' + breach.join(", ") + '</span>' : "") +
+    '</div>';
+
+  var body = t.n ? pitchCrowd(cx, t) :
+    '<div class="pitch"><div class="empty-note" style="color:#fff; padding:60px 20px">No teams yet. Share the link and the shirts fill in as votes arrive.</div></div>';
+
+  var stats = '<div class="stats">' +
+    '<div class="stat"><span class="eyebrow">Teams in</span><b>' + t.n + '</b></div>' +
+    '<div class="stat"><span class="eyebrow">Top captain</span><b style="font-size:17px">' + (cx.cap ? esc(cx.cap.p.n) + " " + pct(cx.cap.pct) : "—") + '</b></div>' +
+    '<div class="stat"><span class="eyebrow">Most picked</span><b style="font-size:17px">' + (topPick ? esc(topPick.p.n) + " " + pct(topPick.pct) : "—") + '</b></div>' +
+    '</div>';
+
+  var share = '<section class="panel"><header><h3>Share with your viewers</h3></header><div class="panelbody">' +
+    '<div class="sharebox"><code>' + esc(link) + '</code><button class="btn btn-sm" data-act="copy" data-link="' + esc(link) + '">Copy</button></div>' +
+    '<button class="btn btn-sm" data-act="sim">Simulate 200 viewers</button>' +
+    '<p class="hint">' + (S.dbReady
+        ? "Votes from other viewers arrive here live."
+        : "Running on this device only — votes made in another browser will not appear.") + '</p>' +
+    '</div></section>';
+
+  return top + banner + '<div class="shell"><div class="pitchwrap">' + pitchbar + body + stats + '</div>' +
+    '<div class="rail">' + share + ranksHTML(t, cx) + '</div></div>';
+}
+
+function notFound(){
+  return '<div class="topbar"><a class="brand" href="#/">' + mark() + 'Crowd XI</a></div>' +
+    '<div class="home center"><h1 class="display" style="font-size:40px">Pool not found</h1>' +
+    '<p class="lede" style="margin:14px auto">That link points to a pool this browser cannot see. Ask the host for a fresh link, or start your own.</p>' +
+    '<a class="btn btn-primary" href="#/">Create a pool</a></div>';
+}
+
+function render(){
+  var app = $("app");
+  var html = S.view === "vote" ? viewVote() : S.view === "live" ? viewLive() : viewHome();
+  app.innerHTML = html;
+}
+G.render = render;
+})();
+</script>
+<script>
+(function(){
+"use strict";
+var G = window.__CXI, S = G.S, P = G.P, SQUAD = G.SQUAD;
+
+function rerender(focusSel){
+  G.render();
+  if(focusSel){
+    var el = document.querySelector(focusSel);
+    if(el){ el.focus(); if(el.setSelectionRange && el.type !== "number"){ var v = el.value; try{ el.setSelectionRange(v.length, v.length); }catch(e){} } }
+  }
+}
+function compact(k){
+  var arr = S.sq.p[k].filter(function(x){ return x; });
+  while(arr.length < SQUAD[k]) arr.push(null);
+  S.sq.p[k] = arr;
+}
+function clearArmbands(){
+  var xi = G.xiIds(S.sq);
+  if(S.sq.c && xi.indexOf(S.sq.c) < 0) S.sq.c = null;
+  if(S.sq.v && xi.indexOf(S.sq.v) < 0) S.sq.v = null;
+}
+
+/* ---------- popover for a picked player ---------- */
+var pop = null;
+function closePop(){ if(pop){ pop.remove(); pop = null; } }
+document.addEventListener("click", function(e){
+  if(pop && !pop.contains(e.target) && !e.target.closest(".slot")) closePop();
+});
+window.addEventListener("resize", closePop);
+window.addEventListener("scroll", closePop, true);
+
+function openSlotMenu(key, anchor){
+  closePop();
+  var parts = key.split("-"), k = +parts[0], i = +parts[1];
+  var id = S.sq.p[k][i]; if(!id) return;
+  var sc = G.startCount(S.sq), starter = i < sc[k];
+  var items = [];
+  if(starter){
+    if(S.sq.c !== id) items.push(["cap", "Make captain"]);
+    if(S.sq.v !== id) items.push(["vice", "Make vice-captain"]);
+    if(sc[k] < SQUAD[k] && S.sq.p[k][sc[k]]) items.push(["bench", "Swap to the bench"]);
+  } else {
+    items.push(["start", "Move into the XI"]);
+  }
+  items.push(["remove", "Take out of the squad"]);
+
+  pop = document.createElement("div");
+  pop.className = "panel";
+  pop.style.cssText = "position:fixed; z-index:80; width:210px; padding:5px; box-shadow:var(--shadow)";
+  pop.innerHTML = '<div style="padding:6px 9px 7px; border-bottom:1px solid var(--line-soft); margin-bottom:4px">' +
+      '<div style="font-weight:700">' + G.esc(P[id].n) + '</div>' +
+      '<div class="hint">' + G.TEAM[P[id].team].name + " &middot; " + G.money(P[id].cost) + '</div></div>' +
+    items.map(function(it){
+      return '<button class="btn btn-ghost btn-sm" data-pop="' + it[0] + '" data-key="' + key + '" ' +
+        'style="width:100%; justify-content:flex-start; border:0">' + it[1] + '</button>';
+    }).join("");
+  document.body.appendChild(pop);
+  var r = anchor.getBoundingClientRect();
+  var left = Math.min(Math.max(8, r.left + r.width/2 - 105), window.innerWidth - 218);
+  var top  = r.bottom + 6;
+  if(top + pop.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - pop.offsetHeight - 6);
+  pop.style.left = left + "px"; pop.style.top = top + "px";
+}
+
+function popAction(act, key){
+  var parts = key.split("-"), k = +parts[0], i = +parts[1], id = S.sq.p[k][i];
+  var sc = G.startCount(S.sq);
+  if(act === "cap"){ if(S.sq.v === id) S.sq.v = null; S.sq.c = id; }
+  else if(act === "vice"){ if(S.sq.c === id) S.sq.c = null; S.sq.v = id; }
+  else if(act === "bench"){ var b = sc[k]; var t = S.sq.p[k][b]; S.sq.p[k][b] = id; S.sq.p[k][i] = t; clearArmbands(); }
+  else if(act === "start"){ var last = sc[k] - 1; var t2 = S.sq.p[k][last]; S.sq.p[k][last] = id; S.sq.p[k][i] = t2; clearArmbands(); }
+  else if(act === "remove"){
+    S.sq.p[k][i] = null; compact(k);
+    if(S.sq.c === id) S.sq.c = null;
+    if(S.sq.v === id) S.sq.v = null;
+    clearArmbands();
+  }
+  closePop(); G.render();
+}
+
+/* ---------- clicks ---------- */
+document.addEventListener("click", function(e){
+  var popBtn = e.target.closest("[data-pop]");
+  if(popBtn){ popAction(popBtn.getAttribute("data-pop"), popBtn.getAttribute("data-key")); return; }
+
+  var el = e.target.closest("[data-act]");
+  if(!el) return;
+  var act = el.getAttribute("data-act");
+
+  if(act === "create"){
+    var name = (document.getElementById("pname").value || "").trim() || (G.D.gwName + " pool");
+    var host = (document.getElementById("pnick").value || "").trim();
+    var budget = document.getElementById("pbudget").checked;
+    var id = G.rid(6);
+    var pool = {id:id, name:name, host:host, gw:G.D.gw, budget:budget, created:Date.now()};
+    G.savePool(pool);
+    location.hash = "#/p/" + id + "/live";
+    G.toast("Pool created — share the link");
+  }
+  else if(act === "fill"){ S.picking = el.getAttribute("data-key"); S.q = ""; G.render(); }
+  else if(act === "slot"){ e.preventDefault(); openSlotMenu(el.getAttribute("data-key"), el); }
+  else if(act === "cancelpick"){ S.picking = null; G.render(); }
+  else if(act === "pick"){
+    if(!S.picking) return;
+    var pk = S.picking.split("-"), k = +pk[0], i = +pk[1];
+    S.sq.p[k][i] = +el.getAttribute("data-id");
+    S.picking = null; clearArmbands(); G.render();
+  }
+  else if(act === "submit"){
+    var errs = G.validate(S.sq, S.pool && S.pool.budget);
+    if(errs.length){ G.toast(errs[0]); return; }
+    var nickEl = document.getElementById("nick");
+    var nick = (nickEl && nickEl.value || "").trim() || "Anonymous";
+    G.lsSet("cxi.nick", nick);
+    var entry = {nick:nick, form:S.sq.formation, xi:G.xiIds(S.sq), bench:G.benchIds(S.sq),
+                 c:S.sq.c, v:S.sq.v, ts:Date.now()};
+    el.disabled = true; el.textContent = "Sending…";
+    G.saveEntry(S.poolId, entry).then(function(){
+      S.submitted = true;
+      G.toast("Your team is in");
+      location.hash = "#/p/" + S.poolId + "/live";
+    })["catch"](function(){
+      el.disabled = false; el.textContent = "Submit my team";
+      G.toast("Could not send your team. Try once more.");
+    });
+  }
+  else if(act === "copy"){
+    var link = el.getAttribute("data-link");
+    var done = function(){ G.toast("Link copied"); };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(link).then(done, function(){ G.toast("Copy the link from the box"); });
+    } else G.toast("Copy the link from the box");
+  }
+  else if(act === "sim"){ G.addSimulated(200); G.toast("200 simulated teams added"); }
+  else if(act === "clearsim"){
+    S.entries = S.entries.filter(function(x){ return !x.demo; });
+    S.sim = 0; G.render();
+  }
+});
+
+/* ---------- selects & search ---------- */
+document.addEventListener("change", function(e){
+  var el = e.target.closest("[data-act]"); if(!el) return;
+  var act = el.getAttribute("data-act");
+  if(act === "formation"){ S.sq.formation = el.value; clearArmbands(); G.render(); }
+  else if(act === "fpos"){ S.filterPos = +el.value; G.render(); }
+  else if(act === "fteam"){ S.filterTeam = +el.value; G.render(); }
+  else if(act === "sort"){ S.sort = el.value; G.render(); }
+});
+var qTimer;
+document.addEventListener("input", function(e){
+  var el = e.target.closest('[data-act="q"]'); if(!el) return;
+  S.q = el.value;
+  clearTimeout(qTimer);
+  qTimer = setTimeout(function(){ rerender('[data-act="q"]'); }, 160);
+});
+
+/* ---------- boot ---------- */
+window.addEventListener("hashchange", function(){ closePop(); G.onRoute(); });
+G.onRoute();
+
+if(window.claude && window.claude.use){
+  window.claude.use("db").then(function(d){
+    if(!d) return;                       // no shared database in this view — local mode keeps working
+    G.setDb(d);
+    G.onRoute();                         // re-read the pool and start the live subscription
+  })["catch"](function(){});
+}
+})();
+</script>
