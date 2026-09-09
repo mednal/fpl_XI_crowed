@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "verify:anon": "node scripts/check-anon-access.mjs",
+    "verify:identity": "node scripts/check-entry-identity.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

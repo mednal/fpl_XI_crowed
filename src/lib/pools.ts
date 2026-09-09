@@ -18,7 +18,7 @@ export async function getEntries(poolId: string): Promise<Entry[]> {
   const supabase = getServiceClient();
   const { data } = await supabase
     .from("entries")
-    .select("id, pool_id, voter, nick, formation, xi, bench, captain, vice, updated_at")
+    .select("id, pool_id, nick, formation, xi, bench, captain, vice, updated_at")
     .eq("pool_id", poolId);
   return (data as Entry[]) ?? [];
 }

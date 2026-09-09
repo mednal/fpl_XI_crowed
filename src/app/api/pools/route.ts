@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { getBootstrap } from "@/lib/fpl";
 import { getServiceClient } from "@/lib/supabase";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
+
+// A host needs a handful of pools an evening, not hundreds; every request that
+// gets past here writes a row.
+const LIMIT = 8;
+const WINDOW = 60 * 60 * 1000;
 
 const ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";   // no look-alike characters
 function poolId(len = 6) {
@@ -10,6 +16,14 @@ function poolId(len = 6) {
 }
 
 export async function POST(req: Request) {
+  const limit = rateLimit(`pools:${clientIp(req)}`, LIMIT, WINDOW);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "Too many pools created from this connection. Wait a while before starting another." },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfter) } },
+    );
+  }
+
   let body: { name?: string; host?: string; budget?: boolean };
   try {
     body = await req.json();

@@ -40,6 +40,15 @@ drop policy if exists "entries are readable" on entries;
 create policy "pools are readable"   on pools   for select using (true);
 create policy "entries are readable" on entries for select using (true);
 
+-- Column privileges on top of that policy. `voter` says which browser owns an
+-- entry: exposed to the anon key, reading one off this table was enough to
+-- submit over that person's team. The anon key now sees only the three columns
+-- the results screen's realtime subscription needs — it filters on pool_id and
+-- then refetches the teams through the API — and the squads themselves are
+-- served by a route using the service role key.
+revoke select on entries from anon, authenticated;
+grant  select (id, pool_id, updated_at) on entries to anon, authenticated;
+
 -- Realtime: push entry changes to subscribed results screens. Guarded so the
 -- whole file stays safe to re-run — adding a table twice is an error.
 do $$

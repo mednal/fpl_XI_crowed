@@ -37,7 +37,6 @@ export type Pool = {
 export type Entry = {
   id: string;
   pool_id: string;
-  voter: string;
   nick: string;
   formation: string;
   xi: number[];
@@ -47,9 +46,9 @@ export type Entry = {
   updated_at: string;
 };
 
-/** What a viewer sends when submitting. */
+/** What a viewer sends when submitting. Identity is not in here: it comes from
+ *  the signed cookie the server issued, so it cannot be spoofed. */
 export type EntryInput = {
-  voter: string;
   nick: string;
   formation: string;
   xi: number[];

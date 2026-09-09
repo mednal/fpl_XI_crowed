@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { getBootstrap } from "@/lib/fpl";
 import { getServiceClient } from "@/lib/supabase";
+import { VOTER_COOKIE, VOTER_COOKIE_OPTIONS, mintVoter, readVoter } from "@/lib/identity";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { validateEntry } from "@/lib/squad";
 import type { EntryInput, Player } from "@/lib/types";
 
 type Ctx = { params: Promise<{ id: string }> };
+
+// A viewer edits their team freely; this only stops a script hammering the route.
+const LIMIT = 30;
+const WINDOW = 10 * 60 * 1000;
 
 export async function GET(_req: Request, { params }: Ctx) {
   const { id } = await params;
@@ -26,6 +33,14 @@ export async function GET(_req: Request, { params }: Ctx) {
 export async function POST(req: Request, { params }: Ctx) {
   const { id } = await params;
 
+  const limit = rateLimit(`entries:${clientIp(req)}`, LIMIT, WINDOW);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "Too many submissions from this connection. Wait a minute and send your team again." },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfter) } },
+    );
+  }
+
   let body: EntryInput;
   try {
     body = await req.json();
@@ -33,9 +48,27 @@ export async function POST(req: Request, { params }: Ctx) {
     return NextResponse.json({ error: "Send a JSON body." }, { status: 400 });
   }
 
-  const voter = (body.voter ?? "").trim();
-  if (!voter || voter.length > 64) {
-    return NextResponse.json({ error: "Missing voter id." }, { status: 400 });
+  // Identity comes from the signed cookie, never from the body: an id read off
+  // the entries table is useless without the signature, so nobody can submit
+  // over somebody else's team.
+  let voter: string | null;
+  let mintedCookie: string | null = null;
+  try {
+    const jar = await cookies();
+    voter = await readVoter(jar.get(VOTER_COOKIE)?.value);
+    if (!voter) {
+      // First visit, or a cookie we did not sign. Issue a fresh one and use it.
+      mintedCookie = await mintVoter();
+      voter = await readVoter(mintedCookie);
+    }
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+  }
+  if (!voter) {
+    return NextResponse.json(
+      { error: "Your browser could not be identified. Enable cookies for this site and try again." },
+      { status: 400 },
+    );
   }
 
   let supabase;
@@ -92,5 +125,7 @@ export async function POST(req: Request, { params }: Ctx) {
   const { error } = await supabase.from("entries").upsert(row, { onConflict: "pool_id,voter" });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ ok: true });
+  const res = NextResponse.json({ ok: true });
+  if (mintedCookie) res.cookies.set(VOTER_COOKIE, mintedCookie, VOTER_COOKIE_OPTIONS);
+  return res;
 }

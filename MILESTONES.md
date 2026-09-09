@@ -19,26 +19,41 @@ Status key: `[ ]` not started · `[~]` in progress · `[x]` done
 
 ---
 
-## M1 — Close the security holes
+## M1 — Close the security holes ✅ done
 
 Nothing else ships until these are fixed. Both are exploitable the moment a link is
 public.
 
-- [ ] **Entry hijacking.** The `entries are readable` RLS policy exposes the `voter`
+- [x] **Entry hijacking.** The `entries are readable` RLS policy exposes the `voter`
       column to the anon key, and `POST /api/pools/[id]/entries` trusts a
       client-supplied `voter` and upserts on `(pool_id, voter)`. Anyone can read a
       voter id off the public table and overwrite that person's squad.
-      Fix: stop exposing `voter` publicly — expose a view without it and point the
-      realtime subscription at that — and bind the id to something the client cannot
-      forge (a signed httpOnly cookie issued on first visit, checked server-side).
-- [ ] **No rate limiting.** `POST /api/pools` creates a row per request with no limit;
+      Fixed in two halves. Identity is now a random id in an httpOnly cookie signed
+      with `VOTER_SECRET` (`src/lib/identity.ts`, issued by `src/middleware.ts`); the
+      route ignores any `voter` in the body, so an id read off the table cannot be
+      replayed. And `voter` is no longer exposed: column privileges cut the anon key
+      down to `id, pool_id, updated_at`, which is all the realtime subscription
+      needs — a view could not be used because a publication cannot contain one.
+- [x] **No rate limiting.** `POST /api/pools` creates a row per request with no limit;
       `POST /entries` is equally open. Add per-IP limiting to both.
-- [ ] Confirm the anon key can still read what `LiveBoard` needs after the policy
+      In-memory sliding window (`src/lib/rate-limit.ts`): 8 pools an hour, 30 entry
+      submissions per 10 minutes, per IP. Per server instance, so it is a brake on
+      scripted abuse rather than an exact quota.
+- [x] Confirm the anon key can still read what `LiveBoard` needs after the policy
       change — the realtime subscription must keep working.
+      Grants applied to the live project and checked with `npm run verify:anon`:
+      realtime events still arrive, and the payload now carries only
+      `id, pool_id, updated_at`. Column privileges filter the WAL payload, which is
+      the part that had to be proved rather than assumed.
 
 **Done when:** a second browser cannot overwrite the first browser's entry even when
 handed its voter id, a scripted loop cannot create unlimited pools, and the live
 screen still updates in realtime.
+
+Verified by two scripts, both writing to the real project and cleaning up after
+themselves: `npm run verify:identity` (needs `npm run dev`) covers the hijack and the
+rate limits — all 15 checks green — and `npm run verify:anon` covers what the anon key
+can see and whether realtime events still arrive.
 
 ---
 
@@ -103,9 +118,11 @@ live board looks right full-screen.
 - [ ] Delete `demo/` — the superseded prototype
 - [ ] Full pass on a real gameweek: create a pool, submit from several browsers, watch
       the live screen update, check the leaderboard after the deadline
-- [ ] Deploy to Vercel with the three environment variables set
+- [ ] Deploy to Vercel with the four environment variables set — the three Supabase
+      ones plus `VOTER_SECRET`, without which nobody can be identified as themselves
 - [ ] Rotate the Supabase `service_role` key on the way out (it has been pasted into a
-      template file and a chat transcript during development)
+      template file and a chat transcript during development). Set `VOTER_SECRET`
+      explicitly first, or the rotation signs every existing viewer out of their entry.
 - [ ] Verify `.env.example` contains placeholders only before the first push
 
 **Done when:** a public URL works end to end for a real audience.

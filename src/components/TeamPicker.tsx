@@ -22,20 +22,6 @@ const SORTS: [string, string][] = [
   ["cheap", "Sort: cheapest"],
 ];
 
-function voterId(): string {
-  const KEY = "cxi.voter";
-  try {
-    let v = localStorage.getItem(KEY);
-    if (!v) {
-      v = crypto.randomUUID();
-      localStorage.setItem(KEY, v);
-    }
-    return v;
-  } catch {
-    return "anon-" + Math.random().toString(36).slice(2);
-  }
-}
-
 export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap }) {
   const byId = useMemo(() => new Map(boot.players.map((p) => [p.id, p])), [boot.players]);
   const teams = useMemo(() => new Map(boot.teams.map((t) => [t.id, t])), [boot.teams]);
@@ -190,7 +176,6 @@ export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap
     setError(null);
     try {
       const body = {
-        voter: voterId(),
         nick: nick.trim() || "Anonymous",
         formation: sq.formation,
         xi: xiIds(sq),
