@@ -53,7 +53,7 @@ export async function buildScoreboard(poolId: string): Promise<ScoresResult> {
 
   const { data: pool, error: poolErr } = await supabase
     .from("pools")
-    .select("id, gw, deadline")
+    .select("id, gw, formation, deadline")
     .eq("id", poolId)
     .maybeSingle();
   if (poolErr) return { kind: "error", status: 500, error: poolErr.message };
@@ -106,7 +106,7 @@ export async function buildScoreboard(poolId: string): Promise<ScoresResult> {
   // The crowd XI has no bench, so nothing can come on for it — but the armband
   // still passes to the crowd's vice if its captain never played.
   const t = tally(rows);
-  const cx = crowdXI(t, byId);
+  const cx = crowdXI(t, byId, pool.formation as string | null);
   const crowdXIIds = [1, 2, 3, 4].flatMap((k) => cx.rows[k as 1].map((r) => r.id));
   const onThePitch = new Set(crowdXIIds);
 

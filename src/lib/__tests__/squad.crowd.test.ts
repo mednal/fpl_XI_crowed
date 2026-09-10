@@ -320,3 +320,59 @@ describe("ranked", () => {
     expect(ranked({ 3: 0 }, 0, w.byId)[0].pct).toBe(0);
   });
 });
+
+/**
+ * A host who wants the same eleven positions on stream every week fixes the
+ * shape when they create the pool. The votes then only decide *who* fills each
+ * row, never how many rows there are.
+ */
+describe("crowdXI — a shape the host fixed", () => {
+  const lopsided = () => votes([
+    ...gkps,
+    ...many(2, [100, 99, 98, 97, 96]),   // the crowd would go 5-2-3 left alone
+    ...many(3, [40, 39, 38, 37, 36]),
+    ...many(4, [95, 94, 93]),
+  ]);
+
+  it("draws the host's shape, not the one the votes point at", () => {
+    const { byId, t } = lopsided();
+    expect(crowdXI(t, byId).formation).toBe("5-2-3");
+    expect(crowdXI(t, byId, "3-4-3").formation).toBe("3-4-3");
+    expect(crowdXI(t, byId, "4-5-1").formation).toBe("4-5-1");
+  });
+
+  it("fills each row with that row's most-picked players", () => {
+    const { byId, t } = lopsided();
+    const cx = crowdXI(t, byId, "3-4-3");
+    expect(cx.rows[2].map((r) => r.count)).toEqual([100, 99, 98]);
+    expect(cx.rows[3].map((r) => r.count)).toEqual([40, 39, 38, 37]);
+    expect(cx.rows[4].map((r) => r.count)).toEqual([95, 94, 93]);
+    expect(all(cx).length).toBe(11);
+  });
+
+  it("still starts exactly one keeper", () => {
+    const { byId, t } = lopsided();
+    expect(crowdXI(t, byId, "5-4-1").rows[1].length).toBe(1);
+  });
+
+  it("keeps the empty slots while the votes are still thin", () => {
+    const { byId, t } = votes([...gkps, ...many(2, [3]), ...many(3, [2]), ...many(4, [1])]);
+    const cx = crowdXI(t, byId, "3-4-3");
+    expect(cx.formation).toBe("3-4-3");
+    expect(cx.shape).toEqual({ 1: 1, 2: 3, 3: 4, 4: 3 });
+    expect(all(cx).length).toBe(4);          // one keeper and the three voted for
+  });
+
+  it("ignores a shape that is not a real formation", () => {
+    const { byId, t } = lopsided();
+    expect(crowdXI(t, byId, "5-5-1").formation).toBe("5-2-3");
+    expect(crowdXI(t, byId, "").formation).toBe("5-2-3");
+    expect(crowdXI(t, byId, null).formation).toBe("5-2-3");
+  });
+
+  it("reports the shape it drew, so the board can pad the rows", () => {
+    const { byId, t } = lopsided();
+    expect(crowdXI(t, byId).shape).toEqual({ 1: 1, 2: 5, 3: 2, 4: 3 });
+    expect(crowdXI(t, byId, "4-4-2").shape).toEqual({ 1: 1, 2: 4, 3: 4, 4: 2 });
+  });
+});

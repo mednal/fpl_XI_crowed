@@ -71,8 +71,12 @@ light/dark palette. No Tailwind, no CSS-in-JS — match that.
    signed httpOnly cookie (`src/lib/identity.ts`, issued by `src/middleware.ts`).
    `entries.voter` is not readable with the anon key — the anon key sees only
    `id, pool_id, updated_at`, which is what the realtime subscription needs.
-3. **The formation is an output.** `crowdXI()` fills the legal minimum (1-3-2-1) then
-   the four best remaining, capped 5 DEF / 5 MID / 3 FWD. Never hard-code a shape.
+3. **The formation is an output, unless the host fixed one.** Left alone, `crowdXI()`
+   fills the legal minimum (1-3-2-1) then the four best remaining, capped
+   5 DEF / 5 MID / 3 FWD. A host who chooses a shape when they create the pool
+   (`pools.formation`, one of `FORMS`) gets exactly that shape, each row filled by
+   its own most-picked players; it changes the board only, never what a viewer may
+   pick. Never hard-code a shape anywhere else.
 4. **Deadlines lock writes.** Entries are rejected once `pools.deadline` has passed.
 5. **`supabase/schema.sql` must stay re-runnable.** It is guarded with
    `if not exists` / `drop policy if exists` throughout. Keep new statements guarded.

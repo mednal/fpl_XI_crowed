@@ -41,6 +41,9 @@ export type Pool = {
   host: string | null;
   gw: number;
   budget: boolean;
+  /** The shape the crowd XI is drawn in, if the host fixed one. Null lets the
+   *  most-picked players decide it, which is the default. */
+  formation: string | null;
   deadline: string | null;
   created_at: string;
 };
@@ -77,6 +80,10 @@ export type Ranked = {
 
 export type CrowdXI = {
   rows: Record<PosId, Ranked[]>;
+  /** Slots per position the board should draw. Same as the row lengths when the
+   *  crowd decides the shape; the host's shape when they fixed one, which can be
+   *  wider than the rows while the votes are still thin. */
+  shape: Record<PosId, number>;
   formation: string;
   captain: Ranked | null;
   vice: Ranked | null;

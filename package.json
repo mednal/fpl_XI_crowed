@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "verify:anon": "node scripts/check-anon-access.mjs",
     "verify:identity": "node scripts/check-entry-identity.mjs",
-    "verify:scores": "node scripts/check-scores.mjs"
+    "verify:scores": "node scripts/check-scores.mjs",
+    "seed": "node scripts/seed-entries.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

@@ -1,25 +1,52 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Bench, PitchRows, type SlotView } from "./Pitch";
 import { Kit, TeamMark } from "./Kit";
 import { Countdown } from "./Countdown";
 import {
   BUDGET, FORMS, MAXCLUB, POS, POSITIONS, POSLONG, SQUAD,
-  benchIds, cheapestPerPos, clubCount, money, newSquad, reserve,
-  spent, squadIds, startCount, validateSquad, xiIds, type Squad,
+  applySwap, benchIds, cheapestPerPos, clubCount, cloneSquad, money, newSquad,
+  removeFromSquad, spent, squadIds, squadChecklist, startCount, swapFormation,
+  xiIds, type SlotRef, type Squad,
 } from "@/lib/squad";
 import type { Bootstrap, Player, PosId, Pool } from "@/lib/types";
 
-type Menu = { pos: PosId; index: number; x: number; y: number } | null;
+type Menu = { pos: PosId; index: number; anchor: HTMLElement } | null;
+
+const MENU_GAP = 6;
+const MENU_EDGE = 8;
+
+/**
+ * Only the checks still outstanding are drawn, on one line, in two or three
+ * words each. A requirement already met is not news — and the strip overhead
+ * already carries the squad count and the bank, so a row of ticks restating
+ * them was paying rail height to say nothing. Each one keeps its full
+ * sentence in `.said`: that is what a screen reader announces, and what the
+ * disabled Send button lists in its tooltip.
+ */
+const CHECK_LABELS: Record<string, string> = {
+  squad: "Squad",
+  budget: "Over by",
+  clubs: "3 per club",
+  captain: "Captain",
+  vice: "Vice",
+};
+
+/** Budget and club limits are broken rules; the rest are simply not done yet. */
+const BROKEN = new Set(["budget", "clubs"]);
+
+// FPL ships ~700 players. The rail shows the strongest slice of whatever the
+// filters leave and says so, rather than ending in silence at an invisible cut.
+const LIST_CAP = 200;
 
 const SORTS: [string, string][] = [
-  ["sel", "Sort: ownership"],
-  ["pts", "Sort: total points"],
+  ["sel", "Sort: selected %"],
+  ["pts", "Sort: points"],
   ["form", "Sort: form"],
-  ["cost", "Sort: most expensive"],
-  ["cheap", "Sort: cheapest"],
+  ["cost", "Sort: price high"],
+  ["cheap", "Sort: price low"],
 ];
 
 export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap }) {
@@ -27,9 +54,13 @@ export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap
   const teams = useMemo(() => new Map(boot.teams.map((t) => [t.id, t])), [boot.teams]);
   const minCost = useMemo(() => cheapestPerPos(boot.players), [boot.players]);
 
-  const [sq, setSq] = useState<Squad>(newSquad);
+  // A host who fixed a shape for the board gets that shape on the pitch too, so
+  // the link opens on the eleven positions their crowd XI is drawn in. It is a
+  // starting point, not a rule: the dropdown still offers every formation.
+  const [sq, setSq] = useState<Squad>(() => newSquad(pool.formation));
   const [picking, setPicking] = useState<{ pos: PosId; index: number } | null>(null);
   const [menu, setMenu] = useState<Menu>(null);
+  const [subbing, setSubbing] = useState<SlotRef | null>(null);
   const [q, setQ] = useState("");
   const [filterPos, setFilterPos] = useState<0 | PosId>(0);
   const [filterTeam, setFilterTeam] = useState(0);
@@ -37,8 +68,16 @@ export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap
   const [nick, setNick] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
+  // Bumps on every successful save. A count and not a flag so a second save
+  // replays the confirmation instead of leaving the banner looking unchanged.
+  const [saves, setSaves] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  // Counts presses of Send made with something still missing. It is a count and
+  // not a flag so that pressing again replays the nudge on the same complaint.
+  const [nags, setNags] = useState(0);
+  const [menuAt, setMenuAt] = useState({ left: 0, top: 0 });
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const bannerRef = useRef<HTMLDivElement | null>(null);
 
   const locked = pool.deadline ? new Date(pool.deadline).getTime() < Date.now() : false;
 
@@ -53,6 +92,13 @@ export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap
     } catch { /* a fresh browser simply starts empty */ }
   }, [pool.id]);
 
+  // Narrow screens stack the send panel below the pitch, so the confirmation
+  // lands off-screen above the button that was just pressed. `nearest` leaves
+  // the wide layout, where both are already visible, alone.
+  useEffect(() => {
+    if (saves) bannerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [saves]);
+
   useEffect(() => {
     const close = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(null);
@@ -61,21 +107,55 @@ export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap
     return () => document.removeEventListener("mousedown", close);
   }, []);
 
+  /**
+   * The menu is fixed, so it has to be re-pinned to its shirt on every scroll or
+   * it drifts across the page. It flips above the shirt when there is no room
+   * below — otherwise a bench player's menu opens past the bottom of the screen
+   * where fixed positioning puts it out of reach.
+   */
+  useLayoutEffect(() => {
+    const anchor = menu?.anchor;
+    const el = menuRef.current;
+    if (!anchor || !el) return;
+
+    const pin = () => {
+      const a = anchor.getBoundingClientRect();
+      if (a.bottom < 0 || a.top > window.innerHeight) { setMenu(null); return; }
+      const { width, height } = el.getBoundingClientRect();
+      const below = a.bottom + MENU_GAP;
+      const above = a.top - MENU_GAP - height;
+      const top = below + height <= window.innerHeight - MENU_EDGE
+        ? below
+        : above >= MENU_EDGE
+          ? above
+          : Math.max(MENU_EDGE, window.innerHeight - MENU_EDGE - height);
+      const left = Math.min(
+        Math.max(MENU_EDGE, a.left + a.width / 2 - width / 2),
+        Math.max(MENU_EDGE, window.innerWidth - MENU_EDGE - width),
+      );
+      setMenuAt((cur) => (cur.left === left && cur.top === top ? cur : { left, top }));
+    };
+
+    pin();
+    window.addEventListener("scroll", pin, true);
+    window.addEventListener("resize", pin);
+    return () => {
+      window.removeEventListener("scroll", pin, true);
+      window.removeEventListener("resize", pin);
+    };
+  }, [menu]);
+
   const sc = startCount(sq.formation);
   const ids = squadIds(sq);
   const bank = BUDGET - spent(sq, byId);
   const clubs = clubCount(sq, byId);
-  const errs = validateSquad(sq, byId, pool.budget);
+  const checks = squadChecklist(sq, byId, pool.budget);
+  const todo = checks.filter((c) => !c.ok);
   const taken = new Set(ids);
 
   function update(fn: (draft: Squad) => void) {
     setSq((prev) => {
-      const next: Squad = {
-        formation: prev.formation,
-        p: { 1: [...prev.p[1]], 2: [...prev.p[2]], 3: [...prev.p[3]], 4: [...prev.p[4]] },
-        captain: prev.captain,
-        vice: prev.vice,
-      };
+      const next = cloneSquad(prev);
       fn(next);
       const xi = xiIds(next);
       if (next.captain && !xi.includes(next.captain)) next.captain = null;
@@ -109,24 +189,56 @@ export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap
   function slotView(pos: PosId, index: number, onPitch: boolean): SlotView {
     const id = sq.p[pos][index];
     const player = id ? byId.get(id) ?? null : null;
-    return {
+    const base: SlotView = {
       player,
       pos,
       sub: player ? money(player.cost) : "Add",
       badge: player && onPitch
         ? (player.id === sq.captain ? "C" : player.id === sq.vice ? "V" : null)
         : null,
+    };
+
+    // Mid-substitution the whole pitch becomes the answer to one question: who
+    // does this player swap with? Everything that is not a legal partner goes
+    // quiet rather than doing something else.
+    if (subbing && !locked) {
+      const chosen = subbing.pos === pos && subbing.index === index;
+      const target = !chosen && !!swapFormation(sq, subbing, { pos, index });
+      return {
+        ...base,
+        className: chosen ? "chosen" : target ? "target" : "dim",
+        title: chosen
+          ? "Tap again to cancel the substitution"
+          : target
+            ? player ? `Swap with ${player.n}` : "Move into this empty slot"
+            : "This swap would not leave a legal team",
+        onClick: chosen
+          ? () => setSubbing(null)
+          : target
+            ? () => { setSq((prev) => applySwap(prev, subbing, { pos, index })); setSubbing(null); }
+            : undefined,
+      };
+    }
+
+    return {
+      ...base,
       onClick: locked
         ? undefined
         : (e: React.MouseEvent<HTMLButtonElement>) => {
             if (player) {
-              const r = e.currentTarget.getBoundingClientRect();
-              setMenu({ pos, index, x: r.left + r.width / 2, y: r.bottom + 6 });
+              setMenu({ pos, index, anchor: e.currentTarget });
             } else {
               setPicking((cur) =>
                 cur && cur.pos === pos && cur.index === index ? null : { pos, index });
               setQ("");
             }
+          },
+      onRemove: locked || !player
+        ? undefined
+        : () => {
+            setMenu(null);
+            setSubbing(null);
+            setSq((prev) => removeFromSquad(prev, { pos, index }));
           },
     };
   }
@@ -139,7 +251,7 @@ export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap
   );
 
   const wantPos: 0 | PosId = picking ? picking.pos : filterPos;
-  const list = useMemo(() => {
+  const { rows, total } = useMemo(() => {
     const sorters: Record<string, (a: Player, b: Player) => number> = {
       sel: (a, b) => b.sel - a.sel,
       pts: (a, b) => b.pts - a.pts,
@@ -148,13 +260,17 @@ export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap
       cheap: (a, b) => a.cost - b.cost,
     };
     const needle = q.trim().toLowerCase();
-    return boot.players
+    const hits = boot.players
       .filter((p) => (!wantPos || p.pos === wantPos)
         && (!filterTeam || p.team === filterTeam)
         && (!needle || p.n.toLowerCase().includes(needle)))
-      .sort(sorters[sort] ?? sorters.sel)
-      .slice(0, 120);
+      .sort(sorters[sort] ?? sorters.sel);
+    return { rows: hits.slice(0, LIST_CAP), total: hits.length };
   }, [boot.players, wantPos, filterTeam, q, sort]);
+
+  // Every row already sits under a position filter, so repeating that position
+  // on all of them is a column of the same three letters.
+  const showPos = wantPos === 0;
 
   /** The only things FPL blocks on: duplicate, position full, 3-per-club, price. */
   function blockedReason(p: Player): string | null {
@@ -172,6 +288,7 @@ export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap
   }
 
   async function submit() {
+    if (todo.length) { setNags((n) => n + 1); return; }
     setBusy(true);
     setError(null);
     try {
@@ -194,8 +311,12 @@ export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap
         localStorage.setItem("cxi.nick", body.nick);
         localStorage.setItem(`cxi.squad.${pool.id}`, JSON.stringify(sq));
       } catch { /* storage off — the team is saved on the server either way */ }
+      // Sending does not take the viewer anywhere: the squad on screen is the
+      // one on the server, and they can keep editing it until the deadline.
+      // The crowd XI is a button away, not a destination they are pushed to.
       setSent(true);
-      window.location.href = `/p/${pool.id}/live`;
+      setSaves((n) => n + 1);
+      setBusy(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not send your team.");
       setBusy(false);
@@ -203,176 +324,215 @@ export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap
   }
 
   const menuPlayer = menu ? byId.get(sq.p[menu.pos][menu.index] ?? -1) : undefined;
+  const subPlayer = subbing ? byId.get(sq.p[subbing.pos][subbing.index] ?? -1) : undefined;
   const menuIsStarter = menu ? menu.index < sc[menu.pos] : false;
+  const showMenu = menu && menuPlayer && !subbing;
 
   return (
-    <>
-      <div className="topbar">
+    <div className="board app pick">
+      <header className="strip">
         <Link className="brand" href="/">
           <span className="dot" />
           Crowd XI
         </Link>
-        <span className="chip">{pool.name}</span>
-        <span className="spacer" style={{ flex: 1 }} />
+        <span className="sep" />
+        <span className="chip name">{pool.name}</span>
+        <span className="spacer" />
         {pool.budget && (
           <span className={`meter${bank < 0 ? " over" : ""}`}>
-            <span className="eyebrow">Money left</span>
-            <b>{money(bank)}</b>
+            <span className="lab">Left</span>
+            <b className="num">{money(bank)}</b>
           </span>
         )}
+        <span className="sep" />
         <span className="meter">
-          <span className="eyebrow">Picked</span>
-          <b>{ids.length}/15</b>
+          <span className="lab">Picked</span>
+          <b className="num">{ids.length}/15</b>
         </span>
         <Link className="btn btn-sm" href={`/p/${pool.id}/live`}>Results</Link>
+      </header>
+
+      <main className="frame">
+        {locked && (
+          <p className="locked-note">
+            The deadline has passed — teams for this gameweek are locked.
+          </p>
+        )}
+        {!locked && sent && (
+          <div className="banner saved" key={saves} ref={bannerRef} aria-live="polite">
+            {saves > 1 ? "Team updated." : "Your team is in."} Change it any time before
+            the deadline.
+            <Link className="btn btn-sm" href={`/p/${pool.id}/live`}>See the crowd XI</Link>
+          </div>
+        )}
+        {subbing && subPlayer && (
+          <div className="subbar">
+            <span>
+              Tap the player <b>{subPlayer.n}</b> should swap with, or an empty slot to move
+              them into it — anything greyed out would leave you without a legal team.
+            </span>
+            <button className="btn btn-sm" onClick={() => setSubbing(null)}>Cancel</button>
+          </div>
+        )}
+
+        <PitchRows rows={pitchRows} teams={teams} />
+        <Bench cells={benchCells} teams={teams} />
+      </main>
+
+      <div className="foot">
+        <label className="lab" htmlFor="formation">Formation</label>
+        <select
+          id="formation"
+          style={{ width: "auto" }}
+          value={sq.formation}
+          disabled={locked}
+          onChange={(e) => update((d) => { d.formation = e.target.value; })}
+        >
+          {Object.keys(FORMS).map((f) => <option key={f} value={f}>{f}</option>)}
+        </select>
+        {pool.formation && (
+          <span
+            className="chip"
+            title={`The host draws the crowd XI in ${pool.formation}. Your own team can be any shape.`}
+          >
+            Board {pool.formation}
+          </span>
+        )}
+        <span className="spacer" />
+        {pool.budget
+          ? <span className={`chip${bank < 0 ? " warn" : ""}`}>Squad {money(spent(sq, byId))}</span>
+          : <span className="chip">No budget</span>}
+        {pool.deadline && <Countdown deadline={pool.deadline} />}
       </div>
 
-      {locked && (
-        <p className="locked-note">
-          The deadline has passed — teams for this gameweek are locked.
-        </p>
-      )}
-      {!locked && sent && (
-        <div className="banner">
-          Your team is in. Change it any time before the deadline.
-          <Link className="btn btn-sm" href={`/p/${pool.id}/live`}>See the crowd XI</Link>
-        </div>
-      )}
+      <aside className={`churn${sort === "pts" || sort === "form" ? " ptsort" : ""}`}>
+        <section className="mod grow">
+          <h2 className="vh">{picking ? `Choose a ${POS[picking.pos]}` : "Players"}</h2>
 
-      <div className="shell">
-        <div className="pitchwrap">
-          <div className="pitchbar">
-            <span className="eyebrow">Formation</span>
-            <select
-              value={sq.formation}
-              disabled={locked}
-              onChange={(e) => update((d) => { d.formation = e.target.value; })}
-            >
-              {Object.keys(FORMS).map((f) => <option key={f} value={f}>{f}</option>)}
-            </select>
-            <span style={{ flex: 1 }} />
-            {pool.budget
-              ? <span className={`chip${bank < 0 ? " warn" : ""}`}>Squad {money(spent(sq, byId))}</span>
-              : <span className="chip">No budget</span>}
-            {pool.deadline && <Countdown deadline={pool.deadline} />}
+          <div className="searchhead">
+            <input
+              type="search" value={q} onChange={(e) => setQ(e.target.value)}
+              aria-label="Search player"
+              placeholder={picking ? `Search ${POSLONG[picking.pos].toLowerCase()}` : "Search any player"}
+            />
+            {picking && (
+              <button className="btn btn-sm btn-ghost" onClick={() => setPicking(null)}>Show all</button>
+            )}
           </div>
 
-          <PitchRows rows={pitchRows} teams={teams} />
-          <Bench cells={benchCells} teams={teams} />
-        </div>
+          <div className="seg" role="group" aria-label="Position">
+            <button
+              type="button" className={`pchip${wantPos === 0 ? " on" : ""}`}
+              aria-pressed={wantPos === 0}
+              onClick={() => { setPicking(null); setFilterPos(0); }}
+            >All</button>
+            {POSITIONS.map((k) => (
+              <button
+                key={k} type="button" className={`pchip${wantPos === k ? " on" : ""}`}
+                aria-pressed={wantPos === k} title={POSLONG[k]}
+                onClick={() => { setPicking(null); setFilterPos(k); }}
+              >{POS[k]}</button>
+            ))}
+          </div>
 
-        <div className="rail">
-          <section className="panel">
-            <header><h3>{sent ? "Update your team" : "Send your team"}</h3></header>
-            <div className="panelbody">
-              {locked ? (
-                <div className="err">Voting is closed for this gameweek.</div>
-              ) : errs.length ? (
-                errs.map((e) => <div className="err" key={e}>{e}</div>)
-              ) : (
-                <div className="chip good">Legal squad — ready to send</div>
-              )}
-              {!locked && pool.budget && ids.length < 15 && bank < reserve(sq, minCost) && (
-                <div className="err">
-                  Only {money(bank)} left for {15 - ids.length} more —
-                  you need at least {money(reserve(sq, minCost))} to fill the squad.
-                </div>
-              )}
-              {error && <div className="err">{error}</div>}
-              <div className="field">
-                <label htmlFor="nick">Your name on the leaderboard</label>
+          <div className="minirow">
+            <select
+              value={filterTeam} aria-label="Club"
+              onChange={(e) => setFilterTeam(Number(e.target.value))}
+            >
+              <option value={0}>All clubs</option>
+              {boot.teams.map((tm) => <option key={tm.id} value={tm.id}>{tm.name}</option>)}
+            </select>
+            <select value={sort} aria-label="Sort" onChange={(e) => setSort(e.target.value)}>
+              {SORTS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+            </select>
+          </div>
+
+          <div className="plist">
+            {rows.length === 0 && <p className="empty-note">No player matches that search.</p>}
+            {rows.map((p) => {
+              const reason = blockedReason(p);
+              return (
+                <button
+                  className="prow" key={p.id} disabled={locked || !!reason}
+                  title={reason ?? undefined} onClick={() => place(p)}
+                >
+                  <Kit team={teams.get(p.team)} className="kit kitmini" />
+                  <span className="who">
+                    {/* A long name ellipsises in a narrow rail; hovering it gives
+                        the whole thing back, unless the row already owes the
+                        viewer the more useful sentence about why it is dead. */}
+                    <span className="n" title={reason ? undefined : p.n}>{p.n}</span>
+                    <span className="m">
+                      <TeamMark team={teams.get(p.team)} />
+                      {showPos && ` ${POS[p.pos]}`}
+                    </span>
+                    {p.st !== "a" && <span className="doubt">Doubt</span>}
+                  </span>
+                  <span className="price num">{money(p.cost)}</span>
+                  <span className="pts num">{p.pts}</span>
+                </button>
+              );
+            })}
+            {total > rows.length && (
+              <p className="empty-note">
+                Showing the top {rows.length} of {total}. Search or filter to reach the rest.
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section className="mod send">
+          <h2 className="vh">{sent ? "Update your team" : "Send your team"}</h2>
+          <div className="modbody">
+            {locked ? (
+              <p className="err">Voting is closed for this gameweek.</p>
+            ) : (
+              <>
                 <input
                   id="nick" type="text" value={nick} disabled={locked}
+                  aria-label="Your name on the leaderboard"
                   onChange={(e) => setNick(e.target.value)}
-                  placeholder="e.g. Sam from Leeds"
+                  placeholder="Your name on the leaderboard"
                 />
-              </div>
-              <button
-                className="btn btn-primary"
-                onClick={submit}
-                disabled={locked || busy || errs.length > 0}
-              >
-                {busy ? "Sending…" : sent ? "Update my team" : "Submit my team"}
-              </button>
-              <p className="hint">
-                Tap a player in the list to add them. Tap a shirt on the pitch to make that
-                player captain, move them to the bench, or take them out.
-              </p>
-            </div>
-          </section>
-
-          <section className="panel">
-            <header>
-              <h3>{picking ? `Choose a ${POS[picking.pos]}` : "Players"}</h3>
-              {picking
-                ? <button className="btn btn-sm btn-ghost" onClick={() => setPicking(null)}>Show all</button>
-                : <span className="hint">Tap a player to add them</span>}
-            </header>
-
-            <div className="tools">
-              <input
-                type="search" placeholder="Search player" value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
-              <select
-                value={wantPos}
-                onChange={(e) => {
-                  setPicking(null);
-                  setFilterPos(Number(e.target.value) as 0 | PosId);
-                }}
-              >
-                <option value={0}>All positions</option>
-                {POSITIONS.map((k) => <option key={k} value={k}>{POSLONG[k]}</option>)}
-              </select>
-              <select value={filterTeam} onChange={(e) => setFilterTeam(Number(e.target.value))}>
-                <option value={0}>All clubs</option>
-                {boot.teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-              <select value={sort} onChange={(e) => setSort(e.target.value)}>
-                {SORTS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
-              </select>
-            </div>
-
-            <div className="plist">
-              {list.length === 0 && <div className="empty-note">No player matches that search.</div>}
-              {list.map((p) => {
-                const reason = blockedReason(p);
-                const disabled = locked || !!reason;
-                return (
-                  <button
-                    className="prow" key={p.id} disabled={disabled}
-                    title={reason ?? undefined} onClick={() => place(p)}
-                  >
-                    <Kit team={teams.get(p.team)} className="kit kitmini" />
-                    <span className="who">
-                      <span className="n">{p.n}</span>
-                      <span className="m">
-                        <TeamMark team={teams.get(p.team)} /> · {POS[p.pos]}
-                        {p.st !== "a" ? " · doubt" : ""}
+                <p
+                  className={`todo-note${nags ? " nudge" : ""}`}
+                  id="ready-list" key={nags} aria-live="polite"
+                >
+                  {todo.map((c) => (
+                    <span
+                      key={c.key} title={c.label}
+                      className={`tk${BROKEN.has(c.key) ? " bad" : ""}`}
+                    >
+                      <span aria-hidden="true">
+                        {CHECK_LABELS[c.key] ?? c.label}
+                        {c.key === "squad" && <b>{ids.length}/15</b>}
+                        {c.key === "budget" && <b>{money(-bank)}</b>}
                       </span>
+                      <span className="said">{c.label}</span>
                     </span>
-                    <span className="price">{money(p.cost)}</span>
-                    <span className="pts">{p.pts}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        </div>
-      </div>
+                  ))}
+                </p>
+              </>
+            )}
+            {error && <p className="err">{error}</p>}
+            <button
+              className="btn btn-primary btn-lg" onClick={submit}
+              disabled={locked || busy} aria-disabled={todo.length > 0}
+              aria-describedby={locked ? undefined : "ready-list"}
+              title={todo.length ? todo.map((c) => c.label).join(" ") : undefined}
+            >
+              {busy ? "Sending…" : todo.length ? sendBlurb(todo.length) : sent ? "Update my team" : "Submit my team"}
+            </button>
+            <p className="hint">Tap a shirt for the armband or a substitution.</p>
+          </div>
+        </section>
+      </aside>
 
-      {menu && menuPlayer && (
-        <div
-          ref={menuRef}
-          className="panel"
-          style={{
-            position: "fixed", zIndex: 80, width: 210, padding: 5,
-            left: Math.min(Math.max(8, menu.x - 105), (typeof window !== "undefined" ? window.innerWidth : 400) - 218),
-            top: menu.y,
-          }}
-        >
-          <div style={{ padding: "6px 9px 7px", borderBottom: "1px solid var(--line-soft)", marginBottom: 4 }}>
-            <div style={{ fontWeight: 700 }}>{menuPlayer.n}</div>
+      {showMenu && (
+        <div ref={menuRef} className="slotmenu" style={{ left: menuAt.left, top: menuAt.top }}>
+          <div className="slotmenu-head">
+            <b>{menuPlayer.n}</b>
             <div className="hint">
               {teams.get(menuPlayer.team)?.name} · {money(menuPlayer.cost)}
             </div>
@@ -389,48 +549,29 @@ export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap
               setMenu(null);
             }}>Make vice-captain</MenuButton>
           )}
-          {menuIsStarter && sc[menu.pos] < SQUAD[menu.pos] && sq.p[menu.pos][sc[menu.pos]] && (
-            <MenuButton onClick={() => {
-              update((d) => {
-                const b = sc[menu.pos];
-                [d.p[menu.pos][menu.index], d.p[menu.pos][b]] = [d.p[menu.pos][b], d.p[menu.pos][menu.index]];
-              });
-              setMenu(null);
-            }}>Swap to the bench</MenuButton>
-          )}
-          {!menuIsStarter && (
-            <MenuButton onClick={() => {
-              update((d) => {
-                const last = sc[menu.pos] - 1;
-                [d.p[menu.pos][menu.index], d.p[menu.pos][last]] = [d.p[menu.pos][last], d.p[menu.pos][menu.index]];
-              });
-              setMenu(null);
-            }}>Move into the XI</MenuButton>
-          )}
           <MenuButton onClick={() => {
-            update((d) => {
-              d.p[menu.pos][menu.index] = null;
-              const packed = d.p[menu.pos].filter(Boolean);
-              while (packed.length < SQUAD[menu.pos]) packed.push(null);
-              d.p[menu.pos] = packed;
-              if (d.captain === menuPlayer.id) d.captain = null;
-              if (d.vice === menuPlayer.id) d.vice = null;
-            });
+            setPicking(null);
+            setSubbing({ pos: menu.pos, index: menu.index });
+            setMenu(null);
+          }}>{menuIsStarter ? "Substitute" : "Bring on"}</MenuButton>
+          <MenuButton onClick={() => {
+            setSq((prev) => removeFromSquad(prev, { pos: menu.pos, index: menu.index }));
             setMenu(null);
           }}>Take out of the squad</MenuButton>
         </div>
       )}
-    </>
+    </div>
   );
+}
+
+/** The button says what is missing, so a viewer never taps a dead control. */
+function sendBlurb(n: number): string {
+  return n === 1 ? "One thing left before you can send" : `${n} things left before you can send`;
 }
 
 function MenuButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
   return (
-    <button
-      className="btn btn-ghost btn-sm"
-      onClick={onClick}
-      style={{ width: "100%", justifyContent: "flex-start", border: 0 }}
-    >
+    <button className="btn btn-ghost btn-sm" onClick={onClick}>
       {children}
     </button>
   );

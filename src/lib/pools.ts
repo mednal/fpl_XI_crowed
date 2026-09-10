@@ -7,7 +7,7 @@ export async function getPool(id: string): Promise<Pool | null> {
   const supabase = getServiceClient();
   const { data } = await supabase
     .from("pools")
-    .select("id, name, host, gw, budget, deadline, created_at")
+    .select("id, name, host, gw, budget, formation, deadline, created_at")
     .eq("id", id)
     .maybeSingle();
   return (data as Pool) ?? null;

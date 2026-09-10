@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Squad } from "@/lib/squad";
-import { benchIds, newSquad, validateEntry, validateSquad, xiIds } from "@/lib/squad";
+import {
+  benchIds, newSquad, squadChecklist, squadIds, startCount, validateEntry, validateSquad, xiIds,
+} from "@/lib/squad";
 import type { EntryInput, Player } from "@/lib/types";
 import { index, world } from "./fixtures";
 
@@ -29,6 +31,23 @@ const repriced = (byId: Map<number, Player>, cost: number) =>
   index([...byId.values()].map((p) => ({ ...p, cost })));
 const oneClub = (byId: Map<number, Player>) =>
   index([...byId.values()].map((p) => ({ ...p, team: 1 })));
+
+describe("newSquad — what the shared link opens on", () => {
+  it("starts in the shape the host fixed for the board", () => {
+    expect(newSquad("3-4-3").formation).toBe("3-4-3");
+    expect(startCount(newSquad("3-4-3").formation)).toEqual({ 1: 1, 2: 3, 3: 4, 4: 3 });
+  });
+
+  it("falls back to 4-4-2 when the host fixed nothing, or fixed nonsense", () => {
+    expect(newSquad().formation).toBe("4-4-2");
+    expect(newSquad(null).formation).toBe("4-4-2");
+    expect(newSquad("6-0-4").formation).toBe("4-4-2");
+  });
+
+  it("is empty whichever shape it opens in", () => {
+    expect(squadIds(newSquad("5-4-1"))).toEqual([]);
+  });
+});
 
 describe("validateSquad — live feedback while picking", () => {
   it("says nothing about a finished, legal squad", () => {
@@ -141,5 +160,68 @@ describe("the browser copy and the server agree on legality", () => {
     sq.p[4][2] = null;
     expect(validateSquad(sq, w.byId, true).length).toBeGreaterThan(0);
     expect(validateEntry(asEntry(sq), w.byId, true).length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * The picker shows the checklist and blocks the button on `validateSquad`. If the
+ * two ever disagreed, a viewer would read a full set of ticks and still be told
+ * the team cannot be sent.
+ */
+describe("squadChecklist — what the send button reports", () => {
+  it("ticks every requirement for a finished, legal squad", () => {
+    const checks = squadChecklist(legal(), world().byId, true);
+    expect(checks.every((c) => c.ok)).toBe(true);
+    expect(checks.map((c) => c.key)).toEqual(["squad", "budget", "clubs", "captain", "vice"]);
+  });
+
+  it("leaves the money line out of a pool with no budget", () => {
+    expect(squadChecklist(legal(), world().byId, false).map((c) => c.key)).toEqual(
+      ["squad", "clubs", "captain", "vice"],
+    );
+  });
+
+  it("names the captain and vice once they are chosen", () => {
+    const w = world();
+    const checks = squadChecklist(legal(), w.byId, true);
+    expect(checks.find((c) => c.key === "captain")?.label).toContain(w.byId.get(8)!.n);
+    expect(checks.find((c) => c.key === "vice")?.label).toContain(w.byId.get(9)!.n);
+  });
+
+  it("says what is left to do on an empty squad", () => {
+    const checks = squadChecklist(newSquad(), world().byId, true);
+    const todo = checks.filter((c) => !c.ok).map((c) => c.label);
+    expect(todo).toContain("Pick all 15 players (0/15 done).");
+    expect(todo).toContain("Choose a captain from your starting XI.");
+    expect(todo).toContain("Choose a vice-captain from your starting XI.");
+    // Nothing is spent and nobody is picked, so money and clubs are already fine.
+    expect(checks.find((c) => c.key === "budget")?.ok).toBe(true);
+    expect(checks.find((c) => c.key === "clubs")?.ok).toBe(true);
+  });
+
+  it("reports the double armband on the vice line", () => {
+    const checks = squadChecklist({ ...legal(), vice: 8 }, world().byId, true);
+    expect(checks.find((c) => c.key === "vice")).toMatchObject({
+      ok: false,
+      label: "Captain and vice-captain must be different players.",
+    });
+  });
+
+  it("is the same rules the button blocks on", () => {
+    const w = world();
+    const cases: Squad[] = [
+      legal(),
+      newSquad(),
+      { ...legal(), captain: null, vice: null },
+      { ...legal(), vice: 8 },
+      { ...legal(), captain: 12 },
+      { ...legal(), formation: "3-5-2" },
+    ];
+    for (const sq of cases) {
+      for (const budgetOn of [true, false]) {
+        expect(squadChecklist(sq, w.byId, budgetOn).filter((c) => !c.ok).map((c) => c.label))
+          .toEqual(validateSquad(sq, w.byId, budgetOn));
+      }
+    }
   });
 });

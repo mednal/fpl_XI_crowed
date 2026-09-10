@@ -155,9 +155,10 @@ separate votes, so the most-voted captain is not always in the crowd XI. The arm
 goes to the most-voted captain who is actually on the pitch — the same player the live
 board draws the C on — because nobody else can be doubled.
 
-Known limitation, not a gap: a viewer cannot order their own bench, so auto-subs come
-on in the order the picker fixed (keeper first, then by position). Real FPL lets a
-manager rank the three outfield substitutes.
+Known limitation, not a gap: the bench is still grouped by position — keeper first,
+then defenders, midfielders, forwards — which is the order auto-subs come on in. The
+picker now lets a viewer substitute freely and reorder substitutes *within* a position,
+but not rank the three outfield substitutes against each other the way real FPL does.
 
 ## M4 — Artwork
 

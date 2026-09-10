@@ -10,6 +10,11 @@ create table if not exists pools (
   created_at  timestamptz not null default now()
 );
 
+-- The shape the results board is drawn in. Null — the default — lets the
+-- most-picked players decide it. Added after the first pools existed, so it is
+-- a guarded alter rather than a column in the create above.
+alter table pools add column if not exists formation text;
+
 create table if not exists entries (
   id          uuid primary key default gen_random_uuid(),
   pool_id     text not null references pools(id) on delete cascade,

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getBootstrap } from "@/lib/fpl";
+import { FORMS } from "@/lib/squad";
 import { getServiceClient } from "@/lib/supabase";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: { name?: string; host?: string; budget?: boolean };
+  let body: { name?: string; host?: string; budget?: boolean; formation?: string | null };
   try {
     body = await req.json();
   } catch {
@@ -34,6 +35,16 @@ export async function POST(req: Request) {
   const name = (body.name ?? "").trim().slice(0, 120);
   const host = (body.host ?? "").trim().slice(0, 80);
   const budget = body.budget !== false;
+
+  // Empty means the crowd decides the shape, which is the default. Anything else
+  // has to be a real FPL formation — it is written to a column the board reads.
+  const formation = (body.formation ?? "").trim();
+  if (formation && !FORMS[formation]) {
+    return NextResponse.json(
+      { error: `${formation} is not an FPL formation. Leave it empty to let the crowd decide the shape.` },
+      { status: 400 },
+    );
+  }
 
   let boot;
   try {
@@ -61,6 +72,7 @@ export async function POST(req: Request) {
       host: host || null,
       gw: boot.gw,
       budget,
+      formation: formation || null,
       deadline: boot.deadline,
     });
     if (!error) return NextResponse.json({ id });

@@ -1,3 +1,14 @@
+/* ==========================================================================
+   Crowd XI — "Result and Churn"
+
+   One composition across all four screens: a FRAME holding what the crowd has
+   settled, and a CHURN rail holding what is still moving. Strips top and
+   bottom carry state. Content bleeds to the frame edge; there are no floating
+   cards, because a broadcast graphic has no page margins.
+
+   The palette and the type stack are fixed. The drawn shirts are unchanged.
+   ========================================================================== */
+
 :root{
   --ground:#F1EFF5; --panel:#FFFFFF; --panel-2:#F7F5FA; --line:#DFDAE8; --line-soft:#EBE7F1;
   --text:#1B1526; --text-2:#5C5370; --text-3:#8E85A3;
@@ -6,6 +17,17 @@
   --pitch-a:#0F6B45; --pitch-b:#12764C; --pitch-line:rgba(255,255,255,.30);
   --shadow:0 1px 2px rgba(27,21,38,.07), 0 8px 24px -12px rgba(27,21,38,.22);
   --r-lg:14px; --r-md:10px; --r-sm:7px;
+
+  /* The frame is the artifact on camera. It stays deep in both themes: a pitch
+     under floodlights is dark whichever way the host's scene is lit. */
+  --frame:#141020; --frame-2:#1B1530; --frame-line:rgba(242,238,250,.14);
+  --frame-text:#F2EEFA; --frame-text-2:#B0A6C6; --frame-text-3:#9B90B5;
+  /* Signal colours as they read against the frame, which never lightens. The
+     page palette's hot and gold are mixed for a light ground and go muddy here. */
+  --frame-hot:#FF7AA6; --frame-gold:#FFC24D;
+
+  --dur:320ms; --dur-fast:150ms; --ease:cubic-bezier(.2,.8,.2,1);
+  --strip:46px;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -15,6 +37,7 @@
     --gold:#FFC24D; --gold-soft:#3A2A08; --cool:#A99BFF;
     --pitch-a:#0B4E33; --pitch-b:#0E5B3C;
     --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+    --frame:#0E0A18; --frame-2:#171128;
   }
 }
 :root[data-theme="dark"]{
@@ -24,232 +47,892 @@
   --gold:#FFC24D; --gold-soft:#3A2A08; --cool:#A99BFF;
   --pitch-a:#0B4E33; --pitch-b:#0E5B3C;
   --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
+  --frame:#0E0A18; --frame-2:#171128;
 }
+
 *{box-sizing:border-box}
+html{color-scheme:light dark}
 body{
   margin:0; background:var(--ground); color:var(--text);
   font-family:"Barlow",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
 }
-h1,h2,h3{margin:0; text-wrap:balance}
+h1,h2,h3,h4{margin:0; text-wrap:balance; font-weight:inherit}
+p{margin:0}
+ul,ol{margin:0; padding:0; list-style:none}
 button{font:inherit; color:inherit; cursor:pointer}
-:focus-visible{outline:2px solid var(--hot); outline-offset:2px; border-radius:4px}
-@media (prefers-reduced-motion:reduce){ *{animation-duration:.01ms!important; transition-duration:.01ms!important} }
-
-.display{font-family:"Anton",Impact,sans-serif; text-transform:uppercase; line-height:.95}
-.eyebrow{font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--text-3)}
-.num{font-variant-numeric:tabular-nums}
-.btn{
-  border:1px solid var(--line); background:var(--panel); padding:8px 14px; border-radius:var(--r-md);
-  font-weight:600; font-size:14px; display:inline-flex; align-items:center; gap:7px; transition:.15s;
-}
-.btn:hover{border-color:var(--text-3)}
-.btn-primary{background:var(--hot); border-color:var(--hot); color:#fff}
-.btn-primary:hover{filter:brightness(1.08)}
-.btn:disabled{opacity:.4; cursor:not-allowed; filter:none}
-.btn-ghost{background:transparent}
-.btn-sm{padding:5px 10px; font-size:13px; border-radius:var(--r-sm)}
-.chip{
-  display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:999px;
-  font-size:12px; font-weight:600; background:var(--panel-2); border:1px solid var(--line-soft); color:var(--text-2);
-}
-.chip.live{background:var(--hot-soft); color:var(--hot); border-color:transparent}
-.chip.live::before{content:""; width:6px; height:6px; border-radius:50%; background:var(--hot); animation:pulse 1.6s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
-.chip.warn{background:var(--gold-soft); color:var(--gold); border-color:transparent}
-.chip.good{background:var(--mint-soft); color:var(--mint); border-color:transparent}
-
-.topbar{
-  display:flex; align-items:center; gap:14px; padding:10px 18px;
-  border-bottom:1px solid var(--line); background:var(--panel); position:sticky; top:0; z-index:30;
-}
-.brand{display:flex; align-items:center; gap:9px; font-family:"Anton"; font-size:19px; letter-spacing:.02em; text-transform:uppercase; background:none; border:0; padding:0}
-.brand .dot{width:11px; height:11px; border-radius:50%; background:var(--hot); box-shadow:0 0 0 3px var(--hot-soft)}
-.topbar .spacer{flex:1}
-.meter{display:flex; align-items:baseline; gap:6px}
-.meter b{font-family:"Anton"; font-size:20px}
-.meter.over b{color:var(--hot)}
-
-.shell{display:grid; grid-template-columns:minmax(0,1fr) 372px; gap:18px; padding:18px; align-items:start; max-width:1320px; margin:0 auto}
-@media (max-width:980px){ .shell{grid-template-columns:minmax(0,1fr)} }
-
-.pitchwrap{background:var(--panel); border:1px solid var(--line); border-radius:var(--r-lg); overflow:hidden; box-shadow:var(--shadow)}
-.pitchbar{display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--line); flex-wrap:wrap}
-.pitch{
-  position:relative; padding:16px 10px 12px;
-  background:repeating-linear-gradient(180deg,var(--pitch-a) 0 44px,var(--pitch-b) 44px 88px);
-}
-.pitch::before{
-  content:""; position:absolute; left:50%; top:38%; transform:translateX(-50%);
-  width:92px; height:92px; border:2px solid var(--pitch-line); border-radius:50%; pointer-events:none;
-}
-.pitch::after{
-  content:""; position:absolute; left:50%; transform:translateX(-50%); top:0;
-  width:44%; height:54px; border:2px solid var(--pitch-line); border-top:0; border-radius:0 0 6px 6px; pointer-events:none;
-}
-.row{display:flex; justify-content:center; gap:clamp(4px,1.6vw,20px); position:relative; z-index:2; margin-bottom:14px}
-.row:last-child{margin-bottom:0}
-.bench{background:var(--panel-2); border-top:1px solid var(--line); padding:11px 10px 13px}
-.bench .benchlabel{text-align:center; margin-bottom:8px}
-
-.slot{width:clamp(62px,10.5vw,88px); display:flex; flex-direction:column; align-items:center; position:relative; background:none; border:0; padding:0}
-.slot .kit{width:100%; height:auto; display:block; filter:drop-shadow(0 3px 5px rgba(0,0,0,.35)); transition:transform .14s}
-.slot:hover .kit{transform:translateY(-3px)}
-.slot.empty .kit{opacity:.42}
-.plate{width:100%; margin-top:-3px; border-radius:5px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,.3)}
-.plate .nm{
-  background:var(--panel); color:var(--text); font-family:"Barlow Condensed"; font-weight:700;
-  font-size:13px; line-height:1.35; text-align:center; padding:1px 3px;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-.plate .sub{
-  background:var(--panel-2); color:var(--text-2); font-size:11px; font-weight:600; text-align:center;
-  padding:1px 3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums;
-}
-.plate .sub.pct{background:var(--hot); color:#fff; letter-spacing:.02em}
-.slot.empty .plate .nm{color:var(--text-3); font-weight:600}
-.badge{
-  position:absolute; top:-4px; right:2px; width:23px; height:23px; border-radius:50%;
-  display:grid; place-items:center; font-size:11px; font-weight:700; z-index:3;
-  background:var(--gold); color:#231800; border:2px solid var(--panel); box-shadow:0 2px 5px rgba(0,0,0,.3);
-}
-.badge.v{background:var(--panel); color:var(--text-2); border-color:var(--line)}
-
-.rail{display:flex; flex-direction:column; gap:14px; position:sticky; top:74px}
-@media (max-width:980px){ .rail{position:static} }
-.panel{background:var(--panel); border:1px solid var(--line); border-radius:var(--r-lg); overflow:hidden; box-shadow:var(--shadow)}
-.panel > header{padding:11px 14px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:9px}
-.panel > header h3{font-family:"Anton"; font-size:15px; text-transform:uppercase; letter-spacing:.03em; flex:1}
-.panelbody{padding:12px 14px; display:flex; flex-direction:column; gap:10px}
-.tools{display:flex; gap:7px; padding:10px 12px; border-bottom:1px solid var(--line-soft); flex-wrap:wrap}
-input[type=text], input[type=search], select{
-  font:inherit; font-size:14px; padding:7px 10px; border:1px solid var(--line); border-radius:var(--r-sm);
-  background:var(--panel-2); color:var(--text); min-width:0;
-}
-input::placeholder{color:var(--text-3)}
-.tools input[type=search]{flex:1 1 120px}
-
-.plist{max-height:min(58vh,560px); overflow:auto; overflow-x:hidden}
-.prow{
-  display:grid; grid-template-columns:30px minmax(0,1fr) 52px 44px; align-items:center; gap:9px;
-  padding:7px 12px; border:0; border-bottom:1px solid var(--line-soft); width:100%; text-align:left; background:none;
-}
-.prow:hover:not(:disabled){background:var(--panel-2)}
-.prow:disabled{opacity:.38; cursor:not-allowed}
-.kitmini{width:26px; height:26px; display:block; object-fit:contain}
-img.kit{object-fit:contain}
-.club-badge{width:14px; height:14px; object-fit:contain; vertical-align:-3px}
-.brandlogo{height:22px; width:auto; max-width:110px; object-fit:contain; display:block; border-radius:4px}
-.prow .who{min-width:0}
-.prow .who .n{font-weight:600; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-.prow .who .m{font-size:11.5px; color:var(--text-3); font-weight:500; letter-spacing:.02em}
-.prow .price{font-weight:700; font-size:14px; text-align:right; font-variant-numeric:tabular-nums}
-.prow .pts{font-size:13px; color:var(--text-2); text-align:right; font-variant-numeric:tabular-nums}
-.empty-note{padding:22px 14px; text-align:center; color:var(--text-3); font-size:14px}
-
-.rank{display:flex; flex-direction:column; gap:3px; padding:8px 14px; border-bottom:1px solid var(--line-soft)}
-.rank .top{display:flex; align-items:center; gap:8px}
-.rank .pos{width:16px; font-family:"Anton"; font-size:13px; color:var(--text-3); flex:0 0 auto}
-.rank .nm{flex:1; font-weight:600; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-.rank .tm{font-size:11px; font-weight:600; color:var(--text-3); letter-spacing:.03em}
-.rank .pc{font-family:"Anton"; font-size:15px; font-variant-numeric:tabular-nums; min-width:46px; text-align:right}
-.bar{height:4px; border-radius:99px; background:var(--line-soft); overflow:hidden; margin-left:24px}
-.bar > i{display:block; height:100%; background:var(--hot); border-radius:99px; transition:width .5s cubic-bezier(.2,.8,.2,1)}
-.rank.in .pc{color:var(--mint)}
-.rank.in .bar > i{background:var(--mint)}
-.grouphead{padding:8px 14px 4px; display:flex; align-items:center; gap:8px; background:var(--panel-2); border-bottom:1px solid var(--line-soft)}
-.grouphead .eyebrow{flex:1}
-
-.home{max-width:1020px; margin:0 auto; padding:34px 20px 60px}
-.hero{display:grid; grid-template-columns:minmax(0,1.2fr) minmax(0,1fr); gap:34px; align-items:start}
-@media (max-width:820px){ .hero{grid-template-columns:1fr; gap:26px} }
-.hero h1{font-family:"Anton"; font-size:clamp(38px,6.6vw,64px); text-transform:uppercase; line-height:.92}
-.hero h1 em{font-style:normal; color:var(--hot)}
-.lede{font-size:17px; color:var(--text-2); max-width:50ch; margin-top:14px}
-.steps{margin:24px 0 0; border-top:1px solid var(--line)}
-.step{display:grid; grid-template-columns:30px 1fr; gap:12px; padding:12px 2px; border-bottom:1px solid var(--line)}
-.step .n{font-family:"Anton"; font-size:17px; color:var(--hot)}
-.step b{display:block; font-weight:600}
-.step span{color:var(--text-2); font-size:14px}
-.formcard{padding:18px; display:flex; flex-direction:column; gap:13px}
-.field{display:flex; flex-direction:column; gap:5px}
-.field label{font-size:12.5px; font-weight:600; color:var(--text-2); letter-spacing:.02em}
-.field input, .field select{width:100%}
-.switch{display:flex; align-items:flex-start; gap:10px; padding:11px 12px; border:1px solid var(--line); border-radius:var(--r-md); background:var(--panel-2); cursor:pointer}
-.switch input{margin:3px 0 0; accent-color:var(--hot); width:16px; height:16px; flex:0 0 auto}
-.switch b{display:block; font-size:14px; font-weight:600}
-.switch span{font-size:12.5px; color:var(--text-3); display:block; line-height:1.4}
-
-.sharebox{display:flex; gap:8px; align-items:center; padding:10px 12px; background:var(--panel-2); border:1px dashed var(--line); border-radius:var(--r-md)}
-.sharebox code{flex:1; font-family:"Barlow"; font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-2)}
-
-.banner{display:flex; align-items:center; gap:10px; padding:9px 18px; background:var(--gold-soft); color:var(--gold); font-size:13.5px; font-weight:600; border-bottom:1px solid var(--line); flex-wrap:wrap}
-.banner .btn{margin-left:auto}
-.stats{display:grid; grid-template-columns:repeat(3,1fr); border-top:1px solid var(--line-soft)}
-.stat{padding:11px 14px; border-right:1px solid var(--line-soft)}
-.stat:last-child{border-right:0}
-.stat b{display:block; font-family:"Anton"; font-size:23px; line-height:1.1; font-variant-numeric:tabular-nums}
-.toast{
-  position:fixed; left:50%; bottom:22px; transform:translateX(-50%); z-index:90;
-  background:var(--text); color:var(--ground); padding:10px 18px; border-radius:999px;
-  font-weight:600; font-size:14px; box-shadow:var(--shadow); opacity:0; pointer-events:none; transition:.25s;
-}
-.toast.on{opacity:1; transform:translate(-50%,-6px)}
-.hint{font-size:12.5px; color:var(--text-3); line-height:1.45}
-.err{color:var(--hot); font-size:13px; font-weight:600}
-.center{text-align:center}
-
-/* ---------- additions for the deployed app ---------- */
 img{max-width:100%}
 [hidden]{display:none!important}
 a{color:inherit; text-decoration:none}
-a.link{color:var(--hot); text-decoration:underline; text-underline-offset:2px}
-.wrap{max-width:1320px; margin:0 auto}
+a.link{color:var(--hot); text-decoration:underline; text-underline-offset:3px; text-decoration-thickness:1.5px}
 
-/* deadline countdown */
-.countdown{display:flex; align-items:baseline; gap:6px}
-.countdown b{font-family:"Anton"; font-size:20px; font-variant-numeric:tabular-nums}
-.countdown.soon b{color:var(--hot)}
+/* --- browser surfaces: the parts we did not draw still carry the design ----- */
+::selection{background:var(--hot); color:#fff}
+:focus-visible{outline:2px solid var(--hot); outline-offset:2px; border-radius:3px}
+.frame :focus-visible, .strip :focus-visible{outline-color:var(--frame-text)}
+input, select, textarea{caret-color:var(--hot)}
+*{scrollbar-width:thin; scrollbar-color:var(--line) transparent}
+*::-webkit-scrollbar{width:9px; height:9px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:var(--line); border-radius:99px; border:2px solid transparent; background-clip:content-box}
+*::-webkit-scrollbar-thumb:hover{background:var(--text-3); background-clip:content-box}
+.frame *, .churn *{scrollbar-color:var(--frame-line) transparent}
+.frame *::-webkit-scrollbar-thumb, .churn *::-webkit-scrollbar-thumb{background:var(--frame-line); background-clip:content-box}
 
-/* locked pool */
-.locked-note{
-  display:flex; align-items:center; gap:10px; padding:12px 16px; margin:0;
-  background:var(--hot-soft); color:var(--hot); font-weight:600; font-size:14px;
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important}
 }
 
-/* leaderboard */
+/* --- type ------------------------------------------------------------------ */
+.display{font-family:"Anton",sans-serif; text-transform:uppercase; line-height:.9; letter-spacing:-.01em; font-weight:400}
+.num{font-variant-numeric:tabular-nums; font-feature-settings:"tnum" 1}
+/* Structural label on a value or a column. Never a kicker over a heading. */
+.lab, .eyebrow{
+  font-family:"Barlow Condensed",sans-serif; font-size:12px; font-weight:600;
+  letter-spacing:.16em; text-transform:uppercase; color:var(--text-3); line-height:1;
+}
+.frame .lab, .churn .lab, .strip .lab, .frame .eyebrow, .churn .eyebrow, .strip .eyebrow{color:var(--frame-text-3)}
+.lede{font-size:17px; line-height:1.55; color:var(--text-2); max-width:62ch}
+
+/* --- controls -------------------------------------------------------------- */
+.btn{
+  border:1px solid var(--line); background:var(--panel); padding:9px 15px; border-radius:var(--r-md);
+  font-family:"Barlow Condensed",sans-serif; font-size:15px; font-weight:600; letter-spacing:.06em;
+  text-transform:uppercase; display:inline-flex; align-items:center; gap:8px; white-space:nowrap;
+  transition:background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.btn:hover{border-color:var(--text-3)}
+.btn-primary{background:var(--hot); border-color:var(--hot); color:#fff}
+.btn-primary:hover{background:var(--text); border-color:var(--text)}
+.btn-ghost{background:transparent}
+.btn-sm{padding:6px 11px; font-size:13.5px; border-radius:var(--r-sm)}
+.btn-lg{padding:13px 22px; font-size:18px}
+.btn:disabled{opacity:.42; cursor:not-allowed}
+.btn[aria-disabled="true"]{opacity:.6}
+/* On the frame and the strips the buttons invert. */
+.strip .btn, .frame .btn, .churn .btn{
+  background:transparent; border-color:var(--frame-line); color:var(--frame-text);
+}
+.strip .btn:hover, .frame .btn:hover, .churn .btn:hover{background:var(--frame-text); color:var(--frame); border-color:var(--frame-text)}
+.strip .btn-primary, .churn .btn-primary{background:var(--hot); border-color:var(--hot); color:#fff}
+.strip .btn-primary:hover, .churn .btn-primary:hover{background:#fff; border-color:#fff; color:var(--frame)}
+
+input[type=text], input[type=search], select{
+  font:inherit; font-size:15px; padding:9px 11px; border:1px solid var(--line); border-radius:var(--r-sm);
+  background:var(--panel-2); color:var(--text); min-width:0; width:100%;
+  transition:border-color var(--dur-fast) var(--ease);
+}
+input:hover, select:hover{border-color:var(--text-3)}
+input::placeholder{color:var(--text-3)}
+.churn input[type=text], .churn input[type=search], .churn select,
+.foot input, .foot select, .strip input, .strip select{
+  background:rgba(255,255,255,.05); border-color:var(--frame-line); color:var(--frame-text);
+}
+.churn input::placeholder, .foot input::placeholder{color:var(--frame-text-3)}
+.churn select option, .foot select option, .strip select option{background:var(--frame-2); color:var(--frame-text)}
+
+.chip{
+  display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:99px;
+  font-family:"Barlow Condensed",sans-serif; font-size:13px; font-weight:600; letter-spacing:.08em;
+  text-transform:uppercase; background:var(--panel-2); border:1px solid var(--line-soft); color:var(--text-2);
+}
+.strip .chip, .frame .chip, .churn .chip{background:rgba(255,255,255,.06); border-color:var(--frame-line); color:var(--frame-text-2)}
+.chip.live, .strip .chip.live{background:var(--hot); border-color:var(--hot); color:#fff}
+.chip.live::before{content:""; width:7px; height:7px; border-radius:50%; background:#fff; animation:pulse 1.8s var(--ease) infinite}
+.chip.warn, .strip .chip.warn{background:var(--gold-soft); color:var(--gold); border-color:transparent}
+.chip.good, .strip .chip.good{background:var(--mint-soft); color:var(--mint); border-color:transparent}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
+
+/* ==========================================================================
+   The composition: strip / frame / churn
+   ========================================================================== */
+
+.board{
+  display:grid; min-width:0;
+  grid-template-columns:minmax(0,1fr) clamp(310px,25vw,410px);
+  grid-template-rows:var(--strip) minmax(0,1fr) auto;
+  grid-template-areas:"head head" "frame churn" "foot churn";
+  min-height:100dvh; background:var(--frame);
+}
+/* The live board is a fixed frame: it must not scroll on camera. */
+.board.fixed{height:100dvh; min-height:0; overflow:hidden}
+
+.strip{
+  grid-area:head; display:flex; align-items:center; gap:12px; padding:0 16px;
+  background:var(--frame); color:var(--frame-text);
+  border-bottom:1px solid var(--frame-line); min-width:0; overflow:hidden;
+}
+.strip > *{flex:0 0 auto}
+/* The pool's own name is the one thing here allowed to give way. */
+.chip.name{
+  display:block; min-width:0; flex:0 1 auto; max-width:min(38vw,340px);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.strip .spacer{flex:1}
+.strip .sep{width:1px; height:20px; background:var(--frame-line); flex:0 0 auto}
+
+.brand{
+  display:flex; align-items:center; gap:9px; font-family:"Anton",sans-serif; font-size:20px;
+  letter-spacing:.02em; text-transform:uppercase; background:none; border:0; padding:0;
+  color:var(--frame-text); flex:0 0 auto;
+}
+.brand .dot{
+  width:11px; height:11px; border-radius:50%; background:var(--hot);
+  box-shadow:0 0 0 3px rgba(229,24,95,.25);
+}
+.brandlogo{height:24px; width:auto; max-width:120px; object-fit:contain; display:block; border-radius:3px}
+
+/* A number the host reads out loud. */
+.meter{display:flex; align-items:baseline; gap:7px; flex:0 0 auto}
+.meter b{font-family:"Anton",sans-serif; font-size:22px; font-variant-numeric:tabular-nums; letter-spacing:.01em}
+.meter.over b{color:var(--hot)}
+
+.frame{
+  grid-area:frame; background:var(--frame); color:var(--frame-text);
+  display:flex; flex-direction:column; min-width:0; min-height:0; position:relative;
+}
+.foot{
+  grid-area:foot; display:flex; align-items:center; gap:10px 14px; flex-wrap:wrap; min-width:0;
+  padding:11px 16px; background:var(--frame); color:var(--frame-text);
+  border-top:1px solid var(--frame-line);
+}
+.foot .spacer{flex:1}
+.foot dl{display:flex; align-items:baseline; gap:8px; margin:0; min-width:0}
+.foot dt{color:var(--frame-text-3)}
+.foot dd{margin:0; font-family:"Anton",sans-serif; font-size:19px; letter-spacing:.01em}
+.foot dd.sm{font-family:"Barlow",sans-serif; font-size:15px; font-weight:600}
+
+.churn{
+  grid-area:churn; background:var(--frame-2); color:var(--frame-text);
+  border-left:1px solid var(--frame-line);
+  display:flex; flex-direction:column; min-width:0; min-height:0; overflow:auto;
+}
+.churn .mod{border-bottom:1px solid var(--frame-line); flex:0 0 auto}
+.churn .mod:last-child{border-bottom:0}
+/* The module holding the primary action sits at the rail's foot, under the
+   one module allowed to grow. */
+.churn .mod.send{margin-top:auto}
+.churn .mod.grow{flex:1 1 auto; min-height:0; display:flex; flex-direction:column}
+.churn .mod.grow .modbody{overflow:auto; min-height:0}
+.mod > h2, .mod > header{
+  display:flex; align-items:center; gap:9px; padding:12px 15px 10px;
+  font-family:"Barlow Condensed",sans-serif; font-size:14px; font-weight:600;
+  letter-spacing:.16em; text-transform:uppercase; color:var(--frame-text-2);
+}
+.mod > h2 .spacer, .mod > header .spacer{flex:1}
+/* A count sitting beside a module heading never wraps under it; "2 in" broken
+   across two lines is two lines of rail height spent on three characters. */
+.mod > h2 .hint, .mod > header .hint{flex:0 0 auto; white-space:nowrap}
+.modbody{padding:0 15px 14px; display:flex; flex-direction:column; gap:11px}
+
+/* Content that scrolls sits inside the frame, never the page. */
+.framebody{flex:1 1 auto; min-height:0; overflow:auto}
+
+@media (max-width:1000px){
+  .board{
+    grid-template-columns:minmax(0,1fr);
+    grid-template-rows:auto auto auto auto;
+    grid-template-areas:"head" "frame" "foot" "churn";
+  }
+  .board.fixed{height:auto; min-height:100dvh; overflow:visible}
+  .churn{border-left:0; border-top:1px solid var(--frame-line)}
+  .strip{position:sticky; top:0; z-index:30}
+}
+
+/* ==========================================================================
+   The pitch and the shirts — drawn artwork unchanged
+   ========================================================================== */
+
+.pitch{
+  position:relative; flex:1 1 auto; min-height:0;
+  display:flex; flex-direction:column; justify-content:space-evenly;
+  padding:20px clamp(10px,2vw,28px);
+  background:
+    linear-gradient(180deg, rgba(0,0,0,.34), rgba(0,0,0,0) 30%, rgba(0,0,0,.30)),
+    repeating-linear-gradient(180deg,var(--pitch-a) 0 6.25%,var(--pitch-b) 6.25% 12.5%);
+}
+.pitch::before{
+  content:""; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  width:min(20vh,150px); height:min(20vh,150px); border:2px solid var(--pitch-line);
+  border-radius:50%; pointer-events:none;
+}
+.pitch::after{
+  content:""; position:absolute; left:50%; transform:translateX(-50%); top:0;
+  width:min(46%,520px); height:min(13vh,92px); border:2px solid var(--pitch-line);
+  border-top:0; border-radius:0 0 4px 4px; pointer-events:none;
+}
+.row{
+  display:flex; justify-content:center; align-items:flex-start;
+  gap:clamp(6px,1.7vw,26px); position:relative; z-index:2;
+}
+
+.slot{
+  width:var(--slot,clamp(62px,9vw,92px)); display:flex; flex-direction:column; align-items:center;
+  position:relative; background:none; border:0; padding:0;
+}
+.slot .kit{width:100%; height:auto; display:block; filter:drop-shadow(0 4px 7px rgba(0,0,0,.45)); transition:transform var(--dur-fast) var(--ease)}
+.slot:hover .kit{transform:translateY(-3px)}
+.slot.empty .kit{opacity:.34}
+.plate{
+  width:100%; margin-top:-2px; border-radius:4px; overflow:hidden; display:flex; flex-direction:column;
+  box-shadow:0 3px 9px rgba(0,0,0,.4);
+}
+.plate .nm, .plate .sub{display:block; width:100%}
+.plate .nm{
+  background:var(--frame); color:var(--frame-text); font-family:"Barlow Condensed",sans-serif;
+  font-weight:600; font-size:clamp(13px,1.05vw,17px); line-height:1.35; text-align:center; padding:2px 4px;
+  letter-spacing:.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.plate .sub{
+  background:rgba(255,255,255,.14); color:var(--frame-text); font-family:"Barlow Condensed",sans-serif;
+  font-size:clamp(12px,.95vw,15px); font-weight:600; text-align:center; padding:1px 4px; letter-spacing:.06em;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums;
+}
+.plate .sub.pct{background:var(--hot); color:#fff}
+.slot.empty .plate .nm{color:var(--frame-text-3)}
+
+/* The signature: a player crossing the cut arrives on the pitch. */
+.slot.arriving .kit{animation:arrive var(--dur) var(--ease) both}
+.slot.arriving .plate .sub{animation:flash 1.1s var(--ease) both}
+@keyframes arrive{
+  from{transform:translateY(-14px) scale(.9); opacity:0; filter:drop-shadow(0 0 0 rgba(0,0,0,0))}
+  to{transform:none; opacity:1}
+}
+@keyframes flash{
+  0%{background:var(--mint); color:#04150e}
+  60%{background:var(--mint); color:#04150e}
+  100%{background:var(--hot); color:#fff}
+}
+
+/* --slot is declared on the pitch and the bench, not on the slot, because the
+   wrapper sits above the slot and has to read it too. Both reads keep the
+   fallback: an undefined var resolves to width:auto, and a drawn shirt with no
+   width attribute then springs to its 300px intrinsic size. */
+.slotwrap{position:relative; width:var(--slot,clamp(62px,9vw,92px)); display:flex}
+
+.slotwrap > .slot{width:100%}
+.slotx{
+  position:absolute; top:-7px; left:-6px; width:22px; height:22px; border-radius:50%; z-index:4;
+  display:grid; place-items:center; padding:0; font-size:15px; line-height:1; font-weight:700;
+  background:var(--panel); color:var(--text-2); border:1px solid var(--line);
+  box-shadow:0 2px 6px rgba(0,0,0,.4); opacity:0;
+  transition:opacity var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.slotwrap:hover .slotx, .slotx:focus-visible{opacity:1}
+.slotx:hover{color:var(--hot); border-color:var(--hot)}
+@media (hover:none){ .slotx{opacity:1} }
+
+.slot.chosen .plate{box-shadow:0 0 0 2px var(--frame), 0 0 0 5px var(--gold)}
+.slot.target .plate{box-shadow:0 0 0 2px var(--frame), 0 0 0 5px var(--mint)}
+.slot.dim{opacity:.32; cursor:default}
+.slot.dim:hover .kit{transform:none}
+
+.badge{
+  position:absolute; top:-5px; right:1px; width:25px; height:25px; border-radius:50%;
+  display:grid; place-items:center; font-family:"Anton",sans-serif; font-size:13px; z-index:3;
+  background:var(--gold); color:#241800; border:2px solid var(--frame); box-shadow:0 2px 6px rgba(0,0,0,.45);
+}
+.badge.v{background:var(--frame-2); color:var(--frame-text-2); border-color:var(--frame-line)}
+
+.bench{
+  border-top:1px solid var(--frame-line); padding:12px clamp(10px,2vw,28px) 14px;
+  background:rgba(0,0,0,.28); flex:0 0 auto;
+}
+.bench .benchlabel{margin-bottom:9px}
+.bench .row{gap:clamp(6px,1.5vw,20px)}
+.bench{--slot:clamp(54px,6vw,74px)}
+
+.club-badge{width:15px; height:15px; object-fit:contain; vertical-align:-3px}
+.kitmini{width:28px; height:28px; display:block; object-fit:contain}
+img.kit{object-fit:contain}
+
+/* ==========================================================================
+   Churn rail modules
+   ========================================================================== */
+
+/* Entries landing, newest first. */
+.tick{display:flex; flex-direction:column}
+.tick li{
+  display:flex; align-items:baseline; gap:10px; padding:7px 15px;
+  border-top:1px solid var(--frame-line); font-size:14px; min-width:0;
+}
+.tick li:first-child{border-top:0}
+.tick .who{flex:1; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.tick .ago{font-family:"Barlow Condensed",sans-serif; font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--frame-text-3); flex:0 0 auto}
+.tick li.new{animation:land var(--dur) var(--ease) both}
+@keyframes land{from{opacity:0; transform:translateX(14px)} to{opacity:1; transform:none}}
+
+/* A ranked contender, in or out of the XI. */
+.rank{display:flex; flex-direction:column; gap:5px; padding:9px 15px; border-top:1px solid var(--frame-line)}
+.rank:first-child{border-top:0}
+.rank .top{display:flex; align-items:baseline; gap:9px; min-width:0}
+.rank .pos{width:18px; font-family:"Anton",sans-serif; font-size:14px; color:var(--frame-text-3); flex:0 0 auto}
+.rank .nm{flex:1; font-weight:600; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
+.rank .tm{font-family:"Barlow Condensed",sans-serif; font-size:13px; font-weight:600; color:var(--frame-text-3); letter-spacing:.08em; flex:0 0 auto}
+.rank .pc{font-family:"Anton",sans-serif; font-size:17px; font-variant-numeric:tabular-nums; min-width:52px; text-align:right; flex:0 0 auto}
+.barline{display:flex; align-items:center; gap:9px; margin-left:27px}
+.barline .bar{flex:1}
+.bar{height:3px; background:var(--frame-line); overflow:hidden}
+.bar > i{display:block; height:100%; width:100%; background:var(--hot); transform-origin:left center; transition:transform 600ms var(--ease)}
+.rank.in .pc{color:var(--mint)}
+.rank.in .bar > i{background:var(--mint)}
+/* Just crossed the cut: the rail says goodbye as the pitch says hello. */
+.rank.crossing{animation:cross var(--dur) var(--ease) both}
+@keyframes cross{
+  0%{background:transparent}
+  40%{background:var(--mint-soft); transform:translateX(10px)}
+  100%{background:transparent; transform:none}
+}
+/* Who a contender is chasing, and by how much. It names a player, so at rail
+   width it gives way rather than crushing the bar it sits beside. */
+.rank .gap{
+  font-family:"Barlow Condensed",sans-serif; font-size:12.5px; letter-spacing:.06em;
+  color:var(--frame-text-3); text-transform:uppercase; font-variant-numeric:tabular-nums;
+  flex:0 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.barline:has(.gap) .bar{flex:0 0 clamp(34px,22%,74px)}
+
+.grouphead{
+  display:flex; align-items:baseline; gap:10px; padding:10px 15px 5px;
+  border-top:1px solid var(--frame-line); background:rgba(0,0,0,.18);
+}
+.grouphead .lab{flex:0 0 auto}
+/* The gloss beside the label takes the leftover and truncates in it. Left to
+   wrap it drops a second line onto the rank row underneath. */
+.grouphead .hint{
+  flex:1 1 auto; min-width:0; text-align:right;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+/* The heading already draws the divider, so the row under it does not. */
+.grouphead + .rank{border-top:0}
+.hint{font-size:13.5px; color:var(--text-3); line-height:1.5}
+.churn .hint, .frame .hint, .strip .hint{color:var(--frame-text-3)}
+.empty-note{padding:24px 15px; text-align:center; color:var(--frame-text-3); font-size:14px; line-height:1.5}
+.err{color:var(--hot); font-size:14px; font-weight:600}
+.churn .err{color:var(--frame-hot)}
+
+/* ---- the live board's rail --------------------------------------------------
+   A scrollbar in a broadcast graphic is a control the audience cannot reach, so
+   every module here is capped to what fits at 1080p. The one exception is the
+   "Also picked" list, which the host asked to be scrollable: on the second
+   monitor and on a viewer's phone the list is operated, not just watched, and
+   they would rather reach every name than read a truncated few. */
+.churn.still{overflow:hidden}
+.churn.still .mod, .churn.still .modbody{overflow:hidden}
+/* The one module in the rail that scrolls, by the host's decision: they wanted
+   every player the crowd picked reachable, not the handful a fixed height can
+   hold. So the module becomes a column and hands the list whatever is left,
+   rather than the list guessing at a height in magic pixels. */
+.churn.still .alsomod{flex:1 1 auto; min-height:0; display:flex; flex-direction:column}
+.churn.still .alsomod > h2{flex:0 0 auto}
+
+/* Every player the crowd picked who did not make the pitch, grouped by
+   position from forwards down to the goalkeeper. The position heading sticks
+   to the top of the list while its own players scroll under it, so the block
+   you are reading always says which position it is. */
+.votelist{
+  list-style:none; margin:0; padding:0 0 6px;
+  flex:1 1 auto; min-height:0; overflow-y:auto;
+  overscroll-behavior:contain; scrollbar-width:thin;
+}
+.votehead{
+  position:sticky; top:0; z-index:1; display:flex; align-items:baseline; gap:7px;
+  padding:5px 15px 3px; background:var(--frame-2);
+  border-bottom:1px solid var(--frame-line);
+}
+.votehead .lab{
+  font-family:"Barlow Condensed",sans-serif; font-size:11.5px; font-weight:600;
+  letter-spacing:.16em; text-transform:uppercase; color:var(--frame-text-2);
+}
+.votehead .cnt{font-family:"Anton",sans-serif; font-size:11.5px; color:var(--frame-text-3)}
+.voterow{
+  position:relative; display:flex; align-items:baseline;
+  gap:8px; padding:3px 15px 4px; min-width:0;
+}
+/* The support bar runs along the foot of the row, so it costs no height and
+   still reads as a bar. Behind the row it read as a highlight on whichever
+   word it happened to reach, and faint enough not to it survived neither the
+   rail's contrast nor YouTube's encoder. */
+.voterow > i{
+  position:absolute; left:15px; right:15px; bottom:0; height:2px; display:block;
+  background:var(--hot); opacity:.55; transform-origin:left center;
+  transition:transform 600ms var(--ease);
+}
+.voterow .nm{
+  flex:1 1 auto; min-width:0; font-size:14px; font-weight:600;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.voterow .tm{
+  flex:0 0 auto; font-family:"Barlow Condensed",sans-serif; font-size:12px;
+  font-weight:600; letter-spacing:.08em; color:var(--frame-text-3);
+}
+.voterow .pc{
+  flex:0 0 auto; min-width:46px; text-align:right; font-family:"Anton",sans-serif;
+  font-size:14px; font-variant-numeric:tabular-nums; color:var(--frame-text);
+}
+.churn.still .sharemod{flex:0 0 auto}
+/* Read at TV distance on a compressed stream: the figures carry the row. */
+.churn.still .rank{padding:10px 15px; gap:5px}
+.churn.still .rank .nm{font-size:15px}
+.churn.still .rank .pos{font-size:15px}
+.churn.still .rank .pc{font-size:19px; min-width:56px}
+.churn.still .bar{height:4px}
+
+/* The armband tail — everyone behind the challenger. The leader and the one
+   chasing them are the race a host narrates, so they keep the full row; the
+   rest are a field, and a field of five identical rows reads as five equal
+   contenders while costing the vote list below it 180px it does not have. One
+   line each, the support bar riding the row's foot at no height, and the rank
+   numbers still running down the same column so it reads as one list. */
+.churn.still .rank.slim{position:relative; padding:6px 15px 7px; gap:0}
+.churn.still .rank.slim .nm{font-size:14px}
+.churn.still .rank.slim .pos{font-size:13px}
+.churn.still .rank.slim .pc{font-size:16px; min-width:52px}
+.rank.slim .bar.edge{
+  position:absolute; left:15px; right:15px; bottom:0; height:2px;
+  background:transparent; pointer-events:none;
+}
+.rank.slim .bar.edge > i{opacity:.55}
+
+/* A short board — a 720p source, a laptop window — has to find the room for the
+   armband field somewhere, and the arrivals module is where it is: its figure
+   is already in the strip as "Teams in", so the heading, the number and the
+   name that just landed collapse onto one line and it becomes the strip meter
+   the system documents. Forty-six pixels, taken from the module with the least
+   to say rather than from the list. */
+@media (min-width:1001px) and (max-height:768px){
+  .churn.still .arrivemod{
+    display:flex; align-items:baseline; gap:10px; padding:11px 15px 12px;
+  }
+  .churn.still .arrivemod > h2{padding:0; flex:0 0 auto}
+  .churn.still .arrivemod .countline{
+    flex:1 1 auto; min-width:0; padding:0; justify-content:flex-end; gap:9px;
+  }
+  .churn.still .arrivemod .countline .big{font-size:20px}
+
+  /* And every armband row does what the tail already does: the bar drops onto
+     the row's own foot, where it costs no height. All five names and the vice
+     survive a short board, with the race told by type size rather than by a
+     taller row — which is the distinction that survives being scaled and
+     cropped into a stream anyway. */
+  .churn.still .armbandmod .rank{position:relative; padding:7px 15px 8px; gap:0}
+  .churn.still .armbandmod .rank .barline{
+    position:absolute; left:15px; right:15px; bottom:0; margin:0;
+  }
+  .churn.still .armbandmod .rank .bar{height:2px}
+  .churn.still .armbandmod .rank .bar > i{opacity:.55}
+}
+
+/* Last resort. Under about 640px the rail cannot hold a field as well as a
+   list, and the list is the module the host operates rather than watches. The
+   tail goes; the race and the vice stay, which is what the module is for. */
+@media (min-width:1001px) and (max-height:639px){
+  .churn.still .rank.slim{display:none}
+}
+
+/* The arrivals module, reduced to the one number a host reads out and the one
+   name that just landed. */
+.countline{display:flex; align-items:baseline; gap:10px; padding:0 15px 12px; min-width:0}
+.countline .big{
+  font-family:"Anton",sans-serif; font-size:26px; line-height:1;
+  font-variant-numeric:tabular-nums; color:var(--frame-text);
+}
+.countline .who{
+  flex:1 1 auto; min-width:0; text-align:right;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  font-family:"Barlow Condensed",sans-serif; font-size:13px; font-weight:600;
+  letter-spacing:.1em; text-transform:uppercase; color:var(--frame-text-3);
+}
+
+/* The pool code is read aloud, so it keeps its size beside the link rather
+   than costing a line of its own. */
+.shrow{display:flex; align-items:center; gap:12px}
+/* Anton overshoots a 1.0 line box, and this rail clips rather than scrolls. */
+.shrow .poolcode{flex:0 0 auto; line-height:1.16}
+.shrow .sharebox{flex:1 1 auto; min-width:0; padding:8px 10px}
+
+.sharebox{
+  display:flex; gap:9px; align-items:center; padding:10px 12px;
+  background:rgba(255,255,255,.06); border:1px solid var(--frame-line); border-radius:var(--r-sm);
+}
+.sharebox code{
+  flex:1; font-family:"Barlow",sans-serif; font-size:13.5px; font-weight:600; min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--frame-text-2);
+}
+/* The pool code, read aloud on stream. */
+.poolcode{
+  font-family:"Anton",sans-serif; font-size:clamp(26px,2.4vw,38px); letter-spacing:.06em;
+  line-height:1; color:var(--frame-text);
+}
+
+/* ==========================================================================
+   Banners, notes and menus
+   ========================================================================== */
+
+.banner{
+  display:flex; align-items:center; gap:11px; padding:11px 16px; background:var(--gold-soft);
+  color:var(--text); font-size:14px; font-weight:600; flex-wrap:wrap;
+  border-bottom:1px solid var(--line);
+}
+/* The banner is a gold panel inside the frame, so nothing in it can take the
+   frame's near-white treatment. Gold carries the signal in the ground and the
+   button's edge; the ink is the page's own, which is the only pairing that
+   clears contrast in both themes. */
+.banner .btn{margin-left:auto; background:transparent; border-color:var(--gold); color:var(--text)}
+.banner .btn:hover{background:var(--gold); border-color:var(--gold); color:var(--frame)}
+/* Sending keeps the viewer on the picker, so the save has to announce itself
+   here — the banner is remounted on each one and sweeps its gold once. */
+.banner.saved{animation:saved 1.1s var(--ease) both}
+@keyframes saved{
+  0%{background:var(--mint)}
+  55%{background:var(--mint)}
+  100%{background:var(--gold-soft)}
+}
+.locked-note{
+  display:flex; align-items:center; gap:11px; padding:12px 16px; margin:0;
+  background:var(--hot); color:#fff; font-weight:600; font-size:14px;
+}
+.subbar{
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap; font-size:14px;
+  padding:10px 16px; background:var(--gold); color:#241800; font-weight:500;
+}
+.subbar span{flex:1; min-width:200px}
+.subbar .btn{background:rgba(0,0,0,.14); border-color:rgba(0,0,0,.3); color:#241800}
+.subbar .btn:hover{background:#241800; color:var(--gold); border-color:#241800}
+
+.slotmenu{
+  position:fixed; z-index:80; width:224px; padding:6px; background:var(--frame-2);
+  border:1px solid var(--frame-line); border-radius:var(--r-md); color:var(--frame-text);
+  box-shadow:0 12px 34px -10px rgba(0,0,0,.7);
+}
+.slotmenu-head{padding:7px 10px 8px; border-bottom:1px solid var(--frame-line); margin-bottom:5px}
+.slotmenu-head b{font-weight:700}
+.slotmenu .btn{width:100%; justify-content:flex-start; border-color:transparent}
+
+/* The rail head. Search is the masthead — it is the shortest route to a player —
+   with the position filter as a segmented strip under it, because the line you
+   are filling is the filter you actually reach for. Club and sort are demoted to
+   a pair of unlabelled controls: their own option text names them. */
+.searchhead{display:flex; gap:8px; padding:11px 14px 7px}
+.searchhead input[type=search]{flex:1 1 auto; font-size:15px; padding:9px 12px}
+.seg{display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:4px; padding:0 14px 6px}
+.pchip{
+  padding:6px 0; border:1px solid var(--frame-line); border-radius:var(--r-sm);
+  background:rgba(255,255,255,.04); color:var(--frame-text-2);
+  font-family:"Barlow Condensed",sans-serif; font-size:12.5px; font-weight:600;
+  letter-spacing:.1em; text-transform:uppercase; cursor:pointer;
+  transition:background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.pchip:hover{background:rgba(255,255,255,.1); color:var(--frame-text)}
+/* Selected is the frame's own ink inverted. Hot is spoken for by live. */
+.pchip.on{background:var(--frame-text); border-color:var(--frame-text); color:var(--frame)}
+.minirow{display:grid; grid-template-columns:1fr 1fr; gap:7px; padding:0 14px 8px}
+.minirow select{font-size:13px; padding:6px 9px}
+
+/* One player, one line, one fixed height. The two-line row spent 52px to say
+   the club twice — once in the shirt, once beneath the name — and the list is
+   the whole reason the rail exists. Uniform rows also mean the number of
+   players in view is a property of the rail rather than of the names in it. */
+.plist{overflow:auto; overflow-x:hidden; min-height:0}
+.prow{
+  display:grid; grid-template-columns:24px minmax(0,1fr) auto auto; align-items:center; gap:9px;
+  min-height:42px; padding:4px 14px; border:0; border-top:1px solid var(--frame-line); width:100%;
+  text-align:left; background:none; color:inherit; transition:background var(--dur-fast) var(--ease);
+}
+.prow:hover:not(:disabled){background:rgba(255,255,255,.06)}
+.prow:disabled{opacity:.34; cursor:not-allowed}
+.prow .who{min-width:0; display:flex; align-items:baseline; gap:8px}
+.prow .who .n{
+  min-width:0; font-weight:600; font-size:15.5px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.prow .who .m{
+  flex:0 0 auto; font-family:"Barlow Condensed",sans-serif; font-size:13px;
+  color:var(--frame-text-3); font-weight:600; letter-spacing:.08em; text-transform:uppercase;
+}
+/* Gold is attention without alarm, and the word carries it without the colour. */
+.prow .who .doubt{
+  flex:0 0 auto; font-family:"Barlow Condensed",sans-serif; font-size:12px; font-weight:600;
+  letter-spacing:.1em; text-transform:uppercase; color:var(--frame-gold);
+  border:1px solid currentColor; border-radius:999px; padding:0 6px; line-height:1.5;
+}
+.prow .price{font-family:"Anton",sans-serif; font-size:17px; text-align:right; font-variant-numeric:tabular-nums}
+.prow .pts{font-size:14px; color:var(--frame-text-2); text-align:right; min-width:22px; font-variant-numeric:tabular-nums}
+/* Points are only information when points is what the list is sorted by; the
+   rail says so with a class rather than paying for a column of zeroes. */
+.churn:not(.ptsort) .prow .pts{display:none}
+
+/* What is still outstanding, on one line, and nothing when nothing is. A row of
+   ticks confirming solved requirements cost two wrapped lines of the rail to
+   repeat numbers the strip above already carries. */
+.todo-note{
+  margin:0; display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 7px;
+  font-family:"Barlow Condensed",sans-serif; font-size:14px; font-weight:600;
+  letter-spacing:.06em; text-transform:uppercase; line-height:1.35; color:var(--frame-text-2);
+}
+.todo-note:empty{display:none}
+.todo-note .tk{position:relative; white-space:nowrap}
+.todo-note .tk:not(:last-child)::after{content:"·"; margin-left:7px; color:var(--frame-text-3)}
+.todo-note .tk b{
+  margin-left:5px; font-family:"Anton",sans-serif; font-weight:400;
+  font-variant-numeric:tabular-nums; color:var(--frame-text);
+}
+/* A budget or club limit is a rule already broken, not a step not yet taken. */
+.todo-note .bad, .todo-note .bad b{color:var(--frame-hot)}
+/* The sentence the short label stands for: read aloud, never drawn. */
+.todo-note .said{
+  position:absolute; width:1px; height:1px; margin:-1px; padding:0;
+  overflow:hidden; clip-path:inset(50%); white-space:nowrap;
+}
+.todo-note.nudge, .todo-note.nudge b{color:var(--frame-hot)}
+.todo-note.nudge{animation:nudge .4s var(--ease)}
+@keyframes nudge{0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)}}
+
+.field{display:flex; flex-direction:column; gap:6px}
+.field label{
+  font-family:"Barlow Condensed",sans-serif; font-size:13px; font-weight:600;
+  letter-spacing:.12em; text-transform:uppercase; color:var(--frame-text-2);
+}
+.switch{
+  display:flex; align-items:flex-start; gap:11px; padding:12px; cursor:pointer;
+  border:1px solid var(--frame-line); border-radius:var(--r-sm); background:rgba(255,255,255,.05);
+}
+.switch input{margin:3px 0 0; accent-color:var(--hot); width:17px; height:17px; flex:0 0 auto}
+.switch b{display:block; font-size:15px; font-weight:600}
+.switch span{display:block; font-size:13px; color:var(--frame-text-3); line-height:1.45}
+
+.toast{
+  position:fixed; left:50%; bottom:24px; transform:translateX(-50%); z-index:90;
+  background:var(--text); color:var(--ground); padding:11px 20px; border-radius:99px;
+  font-weight:600; font-size:14px; box-shadow:var(--shadow); opacity:0; pointer-events:none;
+  transition:opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.toast.on{opacity:1; transform:translate(-50%,-6px)}
+
+/* ==========================================================================
+   Leaderboard
+   ========================================================================== */
+
 .lb{width:100%; border-collapse:collapse}
 .lb th{
-  text-align:left; font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
-  color:var(--text-3); padding:8px 14px; border-bottom:1px solid var(--line);
+  text-align:left; font-family:"Barlow Condensed",sans-serif; font-size:13px; font-weight:600;
+  letter-spacing:.16em; text-transform:uppercase; color:var(--frame-text-3);
+  padding:11px 16px; border-bottom:1px solid var(--frame-line); position:sticky; top:0;
+  background:var(--frame); z-index:2;
 }
-.lb td{padding:8px 14px; border-bottom:1px solid var(--line-soft); font-size:14px}
-.lb td.n{font-variant-numeric:tabular-nums; text-align:right; font-weight:700}
-.lb tbody tr:first-child td{background:var(--mint-soft)}
-.lb .rk{font-family:"Anton"; color:var(--text-3); width:34px}
-.lb td.sm{font-size:12.5px; color:var(--text-2)}
+.lb td{padding:11px 16px; border-bottom:1px solid var(--frame-line); font-size:15px}
+.lb td.n{font-family:"Anton",sans-serif; font-size:21px; font-variant-numeric:tabular-nums; text-align:right; letter-spacing:.01em}
+.lb .rk{font-family:"Anton",sans-serif; font-size:17px; color:var(--frame-text-3); width:46px}
+.lb tbody tr.lead .rk{color:var(--mint)}
+.lb tbody tr.lead td.n{color:var(--mint)}
+.lb tbody tr:hover td{background:rgba(255,255,255,.04)}
+.lb td.sm{font-size:14px; color:var(--frame-text-2)}
 .lb .tag{
-  display:inline-block; margin-left:6px; padding:1px 6px; border-radius:99px;
-  background:var(--gold-soft); color:var(--gold); font-size:10.5px; font-weight:700;
-  letter-spacing:.06em; text-transform:uppercase; vertical-align:1px;
+  display:inline-block; margin-left:7px; padding:1px 7px; border-radius:99px;
+  background:rgba(255,255,255,.1); color:var(--frame-text-2); font-family:"Barlow Condensed",sans-serif;
+  font-size:12px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; vertical-align:1px;
 }
-.bigscore{display:flex; align-items:baseline; gap:9px; padding:14px}
-.bigscore b{font-family:"Anton"; font-size:46px; line-height:.9}
-.verdict{padding:0 14px 13px; font-size:14px; color:var(--text-2); line-height:1.5}
-.verdict em{font-style:normal; font-weight:700; color:var(--hot)}
+/* The crowd's own row, dropped into the field it is being measured against. */
+.lb tr.crowdrow td{background:var(--hot); color:#fff; border-color:transparent}
+.lb tr.crowdrow .rk, .lb tr.crowdrow td.sm{color:rgba(255,255,255,.82)}
+.lb tr.crowdrow td.n{color:#fff}
 
-/* loading + error states */
-.skeleton{
-  height:14px; border-radius:4px; background:var(--line-soft);
-  animation:shimmer 1.4s ease-in-out infinite;
+.bigscore{display:flex; align-items:baseline; gap:11px; padding:4px 15px 12px}
+.bigscore b{font-family:"Anton",sans-serif; font-size:54px; line-height:.85; font-variant-numeric:tabular-nums}
+.verdict{padding:0 15px 14px; font-size:15px; color:var(--frame-text-2); line-height:1.55}
+.verdict em{font-style:normal; font-weight:700; color:var(--frame-text)}
+
+.stats{display:grid; grid-template-columns:repeat(2,1fr); border-top:1px solid var(--frame-line)}
+.stats.three{grid-template-columns:repeat(3,1fr)}
+.stat{padding:12px 15px; border-right:1px solid var(--frame-line); min-width:0}
+.stat:last-child{border-right:0}
+.stat b{
+  display:block; font-family:"Anton",sans-serif; font-size:25px; line-height:1.15; margin-top:5px;
+  font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
-@keyframes shimmer{0%,100%{opacity:1}50%{opacity:.45}}
-.pagepad{padding:34px 20px 60px; max-width:1020px; margin:0 auto}
-.stack{display:flex; flex-direction:column; gap:14px}
-.rowline{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.stat b.sm{font-size:18px}
 
-/* Name plates and list rows stack; these are spans, so they need making block. */
-.plate{display:flex; flex-direction:column}
-.plate .nm, .plate .sub{display:block; width:100%}
-.prow .who{display:flex; flex-direction:column; line-height:1.25}
-.prow .who .n, .prow .who .m{display:block}
+.countdown{display:flex; align-items:baseline; gap:7px}
+.countdown b{font-family:"Anton",sans-serif; font-size:21px; font-variant-numeric:tabular-nums}
+.countdown.soon b{color:var(--hot)}
+
+/* ==========================================================================
+   Home
+   ========================================================================== */
+
+/* The head is one horizontal band: the claim on the left, the rules that make it
+   true on the right, both landing on the same baseline. */
+.homehead{
+  padding:clamp(24px,4vw,54px) clamp(18px,3vw,44px) clamp(22px,3vw,38px);
+  max-width:none;
+}
+.band{
+  display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);
+  gap:clamp(24px,4vw,64px); align-items:end;
+}
+.band h1{
+  font-family:"Anton",sans-serif; text-transform:uppercase; font-weight:400;
+  font-size:clamp(38px,4.6vw,68px); line-height:.92; letter-spacing:-.012em;
+  color:var(--frame-text);
+}
+.band h1 em{font-style:normal; color:var(--hot)}
+.band > p{
+  margin:0; color:var(--frame-text-2);
+  font-size:clamp(15px,1.2vw,17.5px); line-height:1.55; max-width:44ch;
+}
+@media (max-width:860px){ .band{grid-template-columns:minmax(0,1fr); align-items:start} }
+
+/* The three steps as one inline sequence under a rule, not three stacked rows. */
+.seq{
+  display:flex; flex-wrap:wrap; gap:clamp(16px,3vw,44px);
+  margin-top:clamp(24px,3.4vw,44px); padding-top:clamp(16px,2vw,22px);
+  border-top:1px solid var(--frame-line);
+}
+.seq li{display:flex; align-items:baseline; gap:10px; min-width:0}
+.seq .n{font-family:"Anton",sans-serif; font-size:19px; color:var(--hot); font-variant-numeric:tabular-nums}
+.seq span{color:var(--frame-text); font-size:clamp(15px,1.1vw,16.5px); font-weight:600}
+/* The mechanism, drawn: many squads arriving, one eleven coming out. Geometry
+   rather than a sample team, so the home page never shows votes nobody cast. */
+.mech{
+  margin:0; padding:clamp(22px,3.4vw,46px) clamp(18px,3vw,44px);
+  border-top:1px solid var(--frame-line);
+  flex:1 1 auto; display:flex; flex-direction:column; justify-content:center;
+}
+.mech svg{width:100%; height:auto; display:block; max-width:860px}
+.mech figcaption{
+  margin-top:clamp(16px,2vw,24px); color:var(--frame-text-2);
+  font-size:clamp(15px,1.15vw,17px); line-height:1.55; max-width:56ch;
+}
+.mech figcaption b{color:var(--frame-text); font-weight:600}
+.mech .axis{
+  font-family:"Barlow Condensed",sans-serif; font-size:12px; font-weight:600;
+  letter-spacing:.16em; text-transform:uppercase; fill:var(--frame-text-3);
+}
+
+.center{text-align:center}
+/* Said, never drawn: a heading the layout no longer needs but a screen reader
+   still does. */
+.vh{
+  position:absolute; width:1px; height:1px; margin:-1px; padding:0;
+  overflow:hidden; clip-path:inset(50%); white-space:nowrap;
+}
+.pagepad{padding:clamp(40px,9vh,90px) 20px; max-width:640px; margin:0 auto; color:var(--frame-text)}
+.rowline{display:flex; align-items:center; gap:11px; flex-wrap:wrap}
+
+/* ==========================================================================
+   App shell variants
+   ========================================================================== */
+
+/* The picker and the leaderboard hold the viewport the way the live board does:
+   the frame and the rail scroll inside themselves, the page never does. */
+.board.app{height:100dvh; min-height:0; overflow:hidden}
+.board.app .frame{overflow:auto}
+/* The picker's frame is a fixed viewport, so four rows and a bench have to
+   share it. The pitch markings are decoration that collided with the shirts at
+   that height, so the picker keeps the mown stripes and drops the geometry;
+   the broadcast board is tall enough to keep both. */
+.board.pick .pitch::before, .board.pick .pitch::after{display:none}
+.board.pick .pitch{
+  justify-content:space-evenly; padding-top:11px; padding-bottom:11px;
+  /* space-evenly has nothing to distribute where the frame is not height-bound,
+     so the rows need a floor of their own or they touch on a phone. */
+  row-gap:clamp(8px,1.4vh,22px);
+}
+.board.pick .row{gap:clamp(10px,2.4vw,34px)}
+/* Sized off the viewport's height, not its width: four rows and a bench share a
+   fixed frame, so a shirt that only respects width leaves the rows touching. */
+/* Four rows and a bench share a frame whose height is fixed, so the shirt is
+   sized from the height that is actually left rather than from a flat cap: each
+   row costs the kit plus its ~34px plate, which is what the coefficient and the
+   offset below are. A notice above the pitch takes a strip of that height, and
+   the pitch is its sibling, so it can say so itself. The vw term is what governs
+   on a phone, where the frame is not height-bound at all. */
+.board.pick .pitch{--slot:clamp(44px, min(calc(23vh - 86px), 15vw), 110px)}
+.board.pick :is(.banner, .locked-note, .subbar) ~ .pitch{
+  --slot:clamp(44px, min(calc(23vh - 100px), 15vw), 110px);
+}
+/* Substitutes read as substitutes: the bench is a step down from the eleven. */
+.board.pick .bench{--slot:min(clamp(36px,3.9vw,58px), 6.4vh); padding-top:9px; padding-bottom:10px}
+.board.pick .bench .benchlabel{margin-bottom:6px}
+.board.pick .plate .nm{font-size:clamp(11px,.8vw,13px); padding:1px 3px; line-height:1.25}
+.board.pick .plate .sub{font-size:clamp(10px,.75vw,12px); padding:0 3px; line-height:1.3}
+/* The rail is the picking surface, so the list is what the rail is for. The
+   send module carries no heading and no field label — the button and the
+   placeholder say those words already — which is the height the list gets back.
+   Overflow is hidden on the growing module so a rail that does run short
+   scrolls as one piece instead of letting the list ride under the module
+   below it. */
+.board.pick .mod.grow{overflow:hidden}
+.board.pick .plist{flex:1 1 auto; min-height:clamp(200px,36vh,540px)}
+.board.pick .send .modbody{padding:10px 14px 13px; gap:9px}
+.board.pick .send .hint{font-size:12.5px}
+@media (max-width:1000px){
+  .board.app{height:auto; min-height:100dvh; overflow:visible}
+  .board.app .frame{overflow:visible}
+  .board.app .churn{max-height:none}
+  .board.pick .plist{max-height:64vh}
+}
+
+/* The leaderboard's frame is a table, not a pitch. */
+.board.table .frame{background:var(--frame)}
+.tablehead{
+  display:flex; align-items:center; gap:11px; padding:16px 16px 13px;
+  border-bottom:1px solid var(--frame-line);
+}
+.tablehead h1{font-family:"Anton",sans-serif; text-transform:uppercase; font-size:clamp(20px,2vw,30px); letter-spacing:.01em}
+.tablehead .spacer{flex:1}
+
+/* The home page scrolls like a page; the rail follows down beside it. */
+.board.home{min-height:100dvh; height:auto; overflow:visible}
+.board.home .strip{position:sticky; top:0; z-index:30}
+.board.home .churn{align-self:stretch}
+.board.home .frame{overflow:visible}
+.board.home .pitch{min-height:min(60vh,540px); padding-top:34px; padding-bottom:34px}
+.board.home .pitch{--slot:clamp(58px,7vw,94px)}
+@media (max-width:1000px){
+  .board.home .pitch{min-height:0}
+}
+
+/* States that have no rail: the frame takes the whole width. */
+.frame.wide{grid-column:1 / -1; grid-row:2 / -1}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){ html{scroll-behavior:auto} }
+
+/* ==========================================================================
+   Fixes from the first inspection round
+   ========================================================================== */
+
+/* On a 1920 broadcast frame the eleven has to actually fill it — but the frame is
+   often a good deal shorter than 1080 (a scaled desktop, a cropped OBS source), and a
+   shirt sized on width alone pushes the forwards off the bottom edge. So the shirt is
+   sized by whichever budget runs out first: 7.2vw, or the height the four rows have
+   left to share once the strip, the foot and the pitch's own padding are paid for. */
+.board.fixed .pitch{
+  --plate:42px;                 /* the name and vote share stacked under each shirt */
+  --chrome:148px;               /* strip + foot + this pitch's vertical padding */
+  --slot:clamp(64px, min(7.2vw, calc(((100dvh - var(--chrome)) / 4 - var(--plate)) * 1.03)), 138px);
+  padding:12px clamp(10px,2vw,28px);
+}
+.board.fixed .bench{--slot:clamp(64px,7.2vw,138px)}
+/* The plate has to stay inside its share of the row for the budget above to hold. */
+.board.fixed .plate .nm{font-size:clamp(12px,.92vw,16px); line-height:1.28; padding:1px 4px}
+.board.fixed .plate .sub{font-size:clamp(12px,.82vw,15px); line-height:1.3; padding:0 4px}
+
+/* The headline reads in three lines rather than orphaning its last word. */
+.homehead{max-width:880px}
+/* The rail is a column, not a card that stops halfway down the page. */
+
+@media (max-width:620px){
+  /* The pool name is the first thing to go when the strip runs out of room, and
+     what is left wraps rather than losing the navigation off the right edge. */
+  .strip .chip.name{display:none}
+  .strip{
+    flex-wrap:wrap; overflow:visible; height:auto; min-height:var(--strip);
+    padding-top:9px; padding-bottom:9px; gap:9px;
+  }
+  .strip .spacer{display:none}
+  .strip .sep{display:none}
+  .foot .spacer{display:none}
+  .foot{padding:10px 14px}
+  .band h1{font-size:clamp(34px,9vw,54px)}
+}

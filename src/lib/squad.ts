@@ -26,9 +26,12 @@ export type Squad = {
   vice: number | null;
 };
 
-export function newSquad(): Squad {
+/** A blank squad. The shape a host fixed for the board is where the picker
+ *  starts, since that is the eleven positions the crowd XI will be drawn in —
+ *  the viewer is still free to change it. An unknown name falls back to 4-4-2. */
+export function newSquad(formation?: string | null): Squad {
   return {
-    formation: "4-4-2",
+    formation: formation && FORMS[formation] ? formation : "4-4-2",
     p: { 1: [null, null], 2: [null, null, null, null, null],
          3: [null, null, null, null, null], 4: [null, null, null] },
     captain: null,
@@ -57,6 +60,102 @@ export function benchIds(sq: Squad): number[] {
   const out: number[] = [];
   for (const k of POSITIONS) for (let i = sc[k]; i < SQUAD[k]; i++) { const id = sq.p[k][i]; if (id) out.push(id); }
   return out;
+}
+
+/** Where a player sits: which position array, and which slot in it. Slots below
+ *  the formation's count are the XI, the rest are the bench. */
+export type SlotRef = { pos: PosId; index: number };
+
+export function isStarter(sq: Squad, ref: SlotRef): boolean {
+  return ref.index < startCount(sq.formation)[ref.pos];
+}
+
+export function cloneSquad(sq: Squad): Squad {
+  return {
+    formation: sq.formation,
+    p: { 1: [...sq.p[1]], 2: [...sq.p[2]], 3: [...sq.p[3]], 4: [...sq.p[4]] },
+    captain: sq.captain,
+    vice: sq.vice,
+  };
+}
+
+/** An armband cannot be worn from the bench, so a move that benches its wearer
+ *  takes it off them rather than quietly leaving a squad the server will reject. */
+function dropArmbands(sq: Squad): Squad {
+  const xi = xiIds(sq);
+  if (sq.captain && !xi.includes(sq.captain)) sq.captain = null;
+  if (sq.vice && !xi.includes(sq.vice)) sq.vice = null;
+  return sq;
+}
+
+/**
+ * The formation a swap between these two slots would leave behind, or null when
+ * it is not a substitution the game allows. Swapping inside one position keeps
+ * the shape; bringing on a substitute of another position changes it, which is
+ * only allowed when what results is a real formation — the same reason FPL
+ * greys out the players you cannot swap with.
+ *
+ * One of the two slots may be empty: taking a starter out leaves a hole, and a
+ * substitute moving into it is the same trade with nobody coming back the other
+ * way. Two empty slots have nothing to trade.
+ */
+export function swapFormation(sq: Squad, a: SlotRef, b: SlotRef): string | null {
+  if (a.pos === b.pos && a.index === b.index) return null;
+  if (!sq.p[a.pos][a.index] && !sq.p[b.pos][b.index]) return null;
+
+  const aStart = isStarter(sq, a);
+  const bStart = isStarter(sq, b);
+  if (aStart && bStart) return null;              // both are already playing
+  // Two substitutes only trade places, which is worth doing: bench order is the
+  // order auto-subs come on in. Across positions there is no place to trade.
+  if (!aStart && !bStart) return a.pos === b.pos ? sq.formation : null;
+  if (a.pos === b.pos) return sq.formation;
+
+  const sc = startCount(sq.formation);
+  const on = aStart ? b.pos : a.pos;
+  const off = aStart ? a.pos : b.pos;
+  const next: Record<PosId, number> = { ...sc, [on]: sc[on] + 1, [off]: sc[off] - 1 };
+  const f = `${next[2]}-${next[3]}-${next[4]}`;
+  return next[1] === 1 && FORMS[f] ? f : null;
+}
+
+function move(arr: (number | null)[], from: number, to: number): void {
+  const [x] = arr.splice(from, 1);
+  arr.splice(to, 0, x);
+}
+
+/** Swaps two slots, returning the squad unchanged if the swap is not legal. */
+export function applySwap(sq: Squad, a: SlotRef, b: SlotRef): Squad {
+  const formation = swapFormation(sq, a, b);
+  if (!formation) return sq;
+
+  const next = cloneSquad(sq);
+  next.formation = formation;
+
+  if (a.pos === b.pos) {
+    const arr = next.p[a.pos];
+    [arr[a.index], arr[b.index]] = [arr[b.index], arr[a.index]];
+    return dropArmbands(next);
+  }
+
+  // Starters are the front of each array, so the two players are moved to the
+  // ends of their new halves: one to the first bench slot, one to the last
+  // starting slot, and everyone else keeps their order.
+  const starter = isStarter(sq, a) ? a : b;
+  const sub = starter === a ? b : a;
+  const sc = startCount(formation);
+  move(next.p[starter.pos], starter.index, sc[starter.pos]);
+  move(next.p[sub.pos], sub.index, sc[sub.pos] - 1);
+  return dropArmbands(next);
+}
+
+/** Takes a player out and leaves their slot empty. Nobody is promoted off the
+ *  bench: taking a starter out is a decision to pick someone else there, not to
+ *  reshuffle a team the viewer has already arranged. */
+export function removeFromSquad(sq: Squad, ref: SlotRef): Squad {
+  const next = cloneSquad(sq);
+  next.p[ref.pos][ref.index] = null;
+  return dropArmbands(next);
 }
 
 export function money(tenths: number): string {
@@ -98,22 +197,78 @@ export function reserve(sq: Squad, min: Record<PosId, number>, ignorePos?: PosId
   return r;
 }
 
+/** One thing a squad must get right, in the order the picker lists them. */
+export type SquadCheck = { key: string; ok: boolean; label: string };
+
+/**
+ * The picker's readiness list: every requirement, met or not, with the sentence
+ * to show for it. `validateSquad` is this list with the met ones dropped, so the
+ * checklist beside the button and the errors it reports can never drift apart.
+ */
+export function squadChecklist(
+  sq: Squad,
+  byId: Map<number, Player>,
+  budgetOn: boolean,
+): SquadCheck[] {
+  const out: SquadCheck[] = [];
+  const ids = squadIds(sq);
+  const done = ids.length === 15;
+  out.push({
+    key: "squad",
+    ok: done,
+    label: done ? "All 15 players picked." : `Pick all 15 players (${ids.length}/15 done).`,
+  });
+
+  if (budgetOn) {
+    const cost = spent(sq, byId);
+    out.push({
+      key: "budget",
+      ok: cost <= BUDGET,
+      label: cost <= BUDGET
+        ? `Inside the budget, with ${money(BUDGET - cost)} in the bank.`
+        : `You are ${money(cost - BUDGET)} over the budget.`,
+    });
+  }
+
+  const cc = clubCount(sq, byId);
+  const over = Object.entries(cc).some(([, n]) => n > MAXCLUB);
+  out.push({
+    key: "clubs",
+    ok: !over,
+    label: over
+      ? "Max 3 players per club — you have too many from one club."
+      : "No more than 3 players from any one club.",
+  });
+
+  const xi = xiIds(sq);
+  const capOk = !!sq.captain && xi.includes(sq.captain);
+  out.push({
+    key: "captain",
+    ok: capOk,
+    label: capOk
+      ? `Captain: ${byId.get(sq.captain!)?.n ?? "chosen"}.`
+      : "Choose a captain from your starting XI.",
+  });
+
+  // The two armbands are one job to the viewer, so the "same player twice" case
+  // is reported here rather than as a fifth line they read after fixing this one.
+  const viceOk = !!sq.vice && xi.includes(sq.vice) && sq.vice !== sq.captain;
+  out.push({
+    key: "vice",
+    ok: viceOk,
+    label: viceOk
+      ? `Vice-captain: ${byId.get(sq.vice!)?.n ?? "chosen"}.`
+      : sq.vice && xi.includes(sq.vice) && sq.vice === sq.captain
+        ? "Captain and vice-captain must be different players."
+        : "Choose a vice-captain from your starting XI.",
+  });
+
+  return out;
+}
+
 /** Checks a squad being built in the browser, for live feedback while picking. */
 export function validateSquad(sq: Squad, byId: Map<number, Player>, budgetOn: boolean): string[] {
-  const errs: string[] = [];
-  const ids = squadIds(sq);
-  if (ids.length < 15) errs.push(`Pick all 15 players (${ids.length}/15 done).`);
-  if (budgetOn && spent(sq, byId) > BUDGET) {
-    errs.push(`You are ${money(spent(sq, byId) - BUDGET)} over the budget.`);
-  }
-  const cc = clubCount(sq, byId);
-  const over = Object.entries(cc).filter(([, n]) => n > MAXCLUB);
-  if (over.length) errs.push("Max 3 players per club — you have too many from one club.");
-  const xi = xiIds(sq);
-  if (!sq.captain || !xi.includes(sq.captain)) errs.push("Choose a captain from your starting XI.");
-  if (!sq.vice || !xi.includes(sq.vice)) errs.push("Choose a vice-captain from your starting XI.");
-  if (sq.captain && sq.captain === sq.vice) errs.push("Captain and vice-captain must be different players.");
-  return errs;
+  return squadChecklist(sq, byId, budgetOn).filter((c) => !c.ok).map((c) => c.label);
 }
 
 /**
@@ -212,7 +367,14 @@ export function ranked(
  * on — constrained only by what makes a legal formation, so the shape comes out
  * of the votes rather than being fixed in advance.
  */
-export function crowdXI(t: Tally, byId: Map<number, Player>): CrowdXI {
+export function crowdXI(
+  t: Tally,
+  byId: Map<number, Player>,
+  /** The shape the host fixed for the board, if they fixed one. An unknown name
+   *  is ignored rather than trusted — the crowd decides, as it always did. */
+  formation?: string | null,
+): CrowdXI {
+  const fixed = formation && FORMS[formation] ? startCount(formation) : null;
   const pools: Record<PosId, Ranked[]> = {
     1: ranked(t.xi, t.n, byId, 1), 2: ranked(t.xi, t.n, byId, 2),
     3: ranked(t.xi, t.n, byId, 3), 4: ranked(t.xi, t.n, byId, 4),
@@ -227,21 +389,33 @@ export function crowdXI(t: Tally, byId: Map<number, Player>): CrowdXI {
       used.add(r.id); rows[k].push(r); howMany--;
     }
   };
-  take(1, 1); take(2, 3); take(3, 2); take(4, 1);      // the legal minimum, 1-3-2-1
+  if (fixed) {
+    // The host wants the same shape on screen every week, so each row is simply
+    // its own most-picked players. Nobody competes across positions.
+    for (const k of POSITIONS) take(k, fixed[k]);
+  } else {
+    take(1, 1); take(2, 3); take(3, 2); take(4, 1);      // the legal minimum, 1-3-2-1
 
-  const caps: Record<number, number> = { 2: 5, 3: 5, 4: 3 };
-  for (let slot = 0; slot < 4; slot++) {               // then the four best left over
-    let best: Ranked | null = null;
-    let bestPos: PosId = 2;
-    for (const k of [2, 3, 4] as PosId[]) {
-      if (rows[k].length >= caps[k]) continue;
-      const cand = pools[k].find((r) => !used.has(r.id));
-      if (cand && (!best || cand.count > best.count)) { best = cand; bestPos = k; }
+    const caps: Record<number, number> = { 2: 5, 3: 5, 4: 3 };
+    for (let slot = 0; slot < 4; slot++) {               // then the four best left over
+      let best: Ranked | null = null;
+      let bestPos: PosId = 2;
+      for (const k of [2, 3, 4] as PosId[]) {
+        if (rows[k].length >= caps[k]) continue;
+        const cand = pools[k].find((r) => !used.has(r.id));
+        if (cand && (!best || cand.count > best.count)) { best = cand; bestPos = k; }
+      }
+      if (!best) break;
+      used.add(best.id); rows[bestPos].push(best);
     }
-    if (!best) break;
-    used.add(best.id); rows[bestPos].push(best);
   }
   for (const k of [2, 3, 4] as PosId[]) rows[k].sort((a, b) => b.count - a.count);
+
+  // Early on a fixed shape may have more slots than there are voted-for players.
+  // The board still draws what the host chose, with the unfilled slots empty.
+  const shape = fixed ?? ({
+    1: rows[1].length, 2: rows[2].length, 3: rows[3].length, 4: rows[4].length,
+  } as Record<PosId, number>);
 
   const picked = POSITIONS.flatMap((k) => rows[k]);
   const cost = picked.reduce((s, r) => s + r.player.cost, 0);
@@ -250,7 +424,8 @@ export function crowdXI(t: Tally, byId: Map<number, Player>): CrowdXI {
 
   return {
     rows,
-    formation: `${rows[2].length}-${rows[3].length}-${rows[4].length}`,
+    shape,
+    formation: `${shape[2]}-${shape[3]}-${shape[4]}`,
     captain: ranked(t.captain, t.n, byId)[0] ?? null,
     vice: ranked(t.vice, t.n, byId)[0] ?? null,
     cost,
