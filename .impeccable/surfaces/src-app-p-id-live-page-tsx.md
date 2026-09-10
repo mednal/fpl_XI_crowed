@@ -8,7 +8,8 @@ related_targets: ["src/app/p/[id]/page.tsx","src/app/p/[id]/scores/page.tsx","sr
 Scope: the four Crowd XI surfaces — live board (lead), picker, leaderboard, home.
 Visitor mode: Experience on the live board; Operate on the picker and leaderboard; Persuade on the home page.
 Audience and job: an FPL content creator putting the board on stream, and viewers picking a squad from a link.
-Pinned by the user: type stack and palette unchanged; drawn shirts unchanged; FPL vocabulary unchanged.
+Pinned by the user: type stack and palette unchanged; FPL vocabulary unchanged.
+Drawn shirts: no longer pinned. The user asked for them to be made distinguishable (2026-09-10); the kit system in DESIGN.md is now the authority.
 Copy is open to rewriting; factual statements and FPL terms stay.
 
 ## Direction contract

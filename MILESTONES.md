@@ -193,10 +193,125 @@ live board looks right full-screen.
 
 ---
 
+## M6 — The paid tier, decided
+
+Decisions only. No code in this milestone, and none of it starts before M5 is done —
+what is written here is what stops M7 being built in the wrong order.
+
+**Start from what the product is: a poll.** The crowd votes, the most-picked XI goes on
+stream. The leaderboard at `/p/[id]/scores` is a bonus a host can put up after the
+gameweek; it is not what the app is for. That settles more than it appears to. It rules
+out building the paid tier around viewers competing for a title, because viewers are not
+competing — they are voting. Anything that turns the crowd into two hundred individual
+scoreboards is pulling against the product.
+
+**The auth question.** A subscription needs a customer who persists across devices and
+months, and a cookie cannot be billed — so charging means real host accounts. But
+nothing in the code forces that now. `supabase/schema.sql` is written as guarded alters
+throughout, so an owner column lands later without a backfill, and host accounts bolt
+onto the host side without touching the viewer path: the anon key is already read-only
+and column-restricted, and every write already goes through a service-role route. The
+risk was never a missed migration. It is building tiers before knowing what a host would
+pay for.
+
+**The line.** Viewers stay anonymous forever. Hosts get accounts, because hosts are who
+pays. Every question below resolves against that line.
+
+**Auth model: claim-after-creation, never sign-in-first.** A pool is still created
+anonymously by anyone, as today. Creation mints a signed host key — the same HMAC
+pattern already proven in `src/lib/identity.ts`, Web Crypto only, no new dependency —
+hashed onto the pool, set as an httpOnly cookie, and shown once as a recovery link.
+Signing in later converts that key into an owner. The host key is not a competing idea
+to accounts; it is the bridge that keeps the first run frictionless, and it pays for
+itself before billing exists by making "the pool was created on the laptop, the board is
+on the OBS machine" survivable.
+
+**What a host would actually pay for**, for a poll, in order of confidence:
+
+1. **The broadcast.** Their logo and colours on the board, no product watermark, and a
+   transparent overlay URL that drops into OBS as a browser source. The host's need is
+   that their stream looks like theirs. `CHANNEL_LOGO` is a global constant today (M4),
+   so this is already half-shaped.
+2. **Scale.** A free cap of around a hundred votes per poll, lifted when paid. It
+   self-selects — a hobbyist with thirty viewers never pays and is the marketing, a
+   channel with five thousand concurrent hits the cap inside a minute and has budget.
+   And it is cost control, not only pricing: every vote is rows, realtime fan-out and
+   payload, so an uncapped free tier makes the largest channels the most expensive to
+   serve.
+3. **A channel page.** The host's past polls in one place, and the crowd's own running
+   record beside them — what the crowd XI scored each week against the average viewer,
+   and how often it won. "Can the chat beat the average?" is a story a host can tell
+   every week, and it is the poll-shaped version of a reason to come back: one team's
+   record, the channel's team, rather than a table of individuals.
+
+|                  | Free                          | Paid                              |
+|------------------|-------------------------------|-----------------------------------|
+| Polls            | unlimited                     | unlimited                         |
+| Votes per poll   | ~100                          | unlimited                         |
+| Board            | drawn kits, product watermark | channel logo and colours, no mark |
+| OBS              | the normal page               | transparent overlay URL           |
+| History          | the poll, until it is gone    | channel page and crowd record     |
+
+Price is deliberately left open. It needs a real host to react to, not a number guessed
+into a repo.
+
+**The crowd record needs no viewer identity at all** — not accounts, not even the
+existing cookie. Every figure in it is per-poll and already computable: what the crowd
+XI scored, what the average viewer scored, which won. Grouping those by host is the only
+new thing. This is worth writing down because the obvious design — following individual
+viewers across gameweeks — would have quietly put the app in the business of tracking
+people, for a feature the product does not need.
+
+**What the schema will need**, all guarded alters in the existing style: an owner on
+`pools`, the host key hash beside it, and a table mapping an account to its billing
+customer and plan. A host's polls group by owner, so nothing else is required to make
+the channel page work. Columns and names are M7's problem. What M6 settles is that none
+of it needs backfilling.
+
+**Done when:** the tiers above have been put in front of at least one real host and have
+either survived or been rewritten here. This milestone is finished by a conversation,
+not a commit.
+
+---
+
+## M7 — Build the business
+
+Ordered so each step stands on its own and the things worth paying for exist before
+there is anything to pay. Gated on M5 shipping and real hosts having used the free
+product on a real gameweek — what they complain about is allowed to reorder this list.
+
+- [ ] **Host key and pool ownership.** No accounts yet. Unlocks the recovery link and
+      the first host-only surface.
+- [ ] **Host accounts, by claim.** Magic link and Google. Host-key pools become
+      claimable; the owner column starts being populated.
+- [ ] **Branding and the OBS overlay.** Per-host `CHANNEL_LOGO`, plus the transparent
+      board URL. The clearest paid value for a poll, so it is built early and given away
+      until there is billing to put behind it.
+- [ ] **The channel page.** A host's past polls, and the crowd's running record against
+      the average viewer.
+- [ ] **Billing and entitlements.** Subscription lifecycle by webhook; entitlement
+      checked at poll creation and at the vote cap.
+
+The first four are worth doing whether or not billing ever ships. The last is the only
+purely commercial one, and it is last on purpose.
+
+**Done when:** a host can sign in, put their own branding on the board, see their
+channel's record, and pay to lift the vote cap.
+
+---
+
 ## Deliberately not doing yet
 
-- **Real sign-in.** Browser-id identity stops casual double-voting, not someone
-  determined to use twenty private windows. Only worth building if the count has to be
-  exact.
-- **Multiple gameweeks per pool.** A pool is pinned to one gameweek by design.
+- **Viewer sign-in — not ever.** Browser-id identity stops casual double-voting, not
+  someone determined to use twenty private windows — and twenty throwaway emails defeat
+  sign-in just as easily, so it buys an accuracy it cannot actually deliver, at the cost
+  of the one thing the product sells: a vote cast sixty seconds after clicking a link.
+  The crowd is the reach, not the customer. Host sign-in is a separate question, answered
+  in M6.
+- **Following a viewer across gameweeks.** The cookie would allow it and the app will
+  not use it. A poll does not need to know that this browser also voted last week, and
+  the one feature that looked like it needed it — the crowd's season record — turns out
+  not to (M6).
+- **Multiple gameweeks per pool.** A pool is pinned to one gameweek by design. The
+  channel page in M7 spans gameweeks by grouping polls, not by unpinning one.
 - **Chips (wildcard, triple captain, bench boost).** Out of scope.

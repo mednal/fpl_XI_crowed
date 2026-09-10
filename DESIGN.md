@@ -163,9 +163,11 @@ treatment rather than inheriting the page's.
 | `gold` | Attention without alarm. The armband, a rule about to break, mid-substitution. |
 | `pitch-a` / `pitch-b` | The mown pitch, and nothing else. |
 
-Club identity is **colour only** — no badges, no kit artwork, ever. Because of that,
-colour can never be the only carrier of meaning anywhere else in the system: every state
-needs a second cue in type, position or label.
+Club identity is **licence-free by construction** — no badges, no kit artwork, ever.
+It comes from the club's own colours and the *cut* of its kit, which is drawn (see
+**Kit** below). Because club colour is spent on club identity, colour can never be the
+only carrier of meaning anywhere else in the system: every state needs a second cue in
+type, position or label.
 
 ## Typography
 
@@ -253,6 +255,23 @@ percentage on `hot`; in the picker it is a price. Slot width is a single custom 
 (on the broadcast board it takes the smaller of `7.2vw` and the height four rows have
 left once the strip, the foot and the pitch's padding are paid for, so the forwards
 cannot fall off a frame shorter than 1080; smaller again on the picker).
+
+**Kit** — the drawn shirt, one SVG on a 64×62 grid mirrored about `x=32`. The torso and
+the sleeves are separate paths because that seam is where a club's identity usually
+lives, and three axes carry it: a **pattern** across the torso (`bars` or `hoops`, with
+a band count — Sunderland's stripes are broad and Sheffield United's are narrow, and the
+count is what says so), a **sleeve** colour where a club's differs from its body, and a
+**trim** colour on the collar and cuffs. Seams are hairlines at 16–24% black, so white
+trim on white sleeves still has an edge; one linear gradient across the whole silhouette
+does the fabric.
+
+Half the league plays in red or blue, so colour and cut alone still leave Liverpool,
+United and Forest as three red shirts. The club's three-letter code is therefore printed
+across the chest, in ink picked from the body's luminance with a contrasting halo so it
+survives a striped shirt. It is the **second, non-colour cue** club identity would
+otherwise be missing, and it is what a host reads to say "that is three Arsenal
+players". Below `52cqw` it would only be a smudge, so a container query on `.slot`
+drops it and the shirt falls back to cut and colour.
 
 **Rank row** — a ranked contender: position code, name, club, percentage on the top line;
 a progress bar with an optional gap note on the second. The bar animates with

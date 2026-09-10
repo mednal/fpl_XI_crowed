@@ -269,7 +269,11 @@ input::placeholder{color:var(--text-3)}
 .slot{
   width:var(--slot,clamp(62px,9vw,92px)); display:flex; flex-direction:column; align-items:center;
   position:relative; background:none; border:0; padding:0;
+  /* The slot sizes the shirt, so the shirt asks the slot how much room it has:
+     below the width where the chest print would only be a smudge, it goes. */
+  container-type:inline-size;
 }
+@container (max-width:52px){ .kit .mark{display:none} }
 .slot .kit{width:100%; height:auto; display:block; filter:drop-shadow(0 4px 7px rgba(0,0,0,.45)); transition:transform var(--dur-fast) var(--ease)}
 .slot:hover .kit{transform:translateY(-3px)}
 .slot.empty .kit{opacity:.34}
@@ -344,6 +348,7 @@ input::placeholder{color:var(--text-3)}
 
 .club-badge{width:15px; height:15px; object-fit:contain; vertical-align:-3px}
 .kitmini{width:28px; height:28px; display:block; object-fit:contain}
+.kitmini .mark{display:none}
 img.kit{object-fit:contain}
 
 /* ==========================================================================

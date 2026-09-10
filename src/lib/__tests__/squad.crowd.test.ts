@@ -191,7 +191,7 @@ describe("crowdXI — the empty and the near-empty pool", () => {
     expect(cx.captain).toBeNull();
     expect(cx.vice).toBeNull();
     expect(cx.cost).toBe(0);
-    expect(cx.clubBreaches).toEqual([]);
+    expect(cx.clubs).toEqual({});
     expect(all(cx)).toEqual([]);
   });
 
@@ -234,17 +234,18 @@ describe("crowdXI — what it reports about the winning XI", () => {
     expect(crowdXI(t, byId).cost).toBe(11 * 50);
   });
 
-  it("flags a club the crowd over-picked — the XI is a vote, not a legal team", () => {
+  it("counts a club that stacked the XI — the XI is a vote, not a legal team", () => {
     const { byId, t } = votes([
       ...gkps.map((g) => ({ ...g, team: 1 })),
       ...many(2, [100, 99, 98, 97, 96]).map((s) => ({ ...s, team: 1 })),
       ...many(3, [90, 89, 88, 87, 86]).map((s) => ({ ...s, team: 2 })),
       ...many(4, [80, 79, 78]).map((s) => ({ ...s, team: 2 })),
     ]);
-    expect(crowdXI(t, byId).clubBreaches).toContain("1");
+    // Well past the three a real squad may hold, and that is a correct result.
+    expect(crowdXI(t, byId).clubs[1]).toBeGreaterThan(3);
   });
 
-  it("draws the club line at the fourth player in the XI, not the third", () => {
+  it("counts a club exactly, whether it supplied three of the XI or four", () => {
     // A known 5-2-3: keeper 1, defenders 3-7, midfielders 8-9, forwards 13-15.
     const shape = (thirdDefenderTeam: number): Spec[] => [
       { pos: 1, votes: 99, team: 1 }, { pos: 1, votes: 1, team: 10 },
@@ -256,20 +257,21 @@ describe("crowdXI — what it reports about the winning XI", () => {
       { pos: 4, votes: 95, team: 7 }, { pos: 4, votes: 94, team: 8 }, { pos: 4, votes: 93, team: 9 },
     ];
     const three = votes(shape(2));
-    expect(crowdXI(three.t, three.byId).clubBreaches).toEqual([]);
+    expect(crowdXI(three.t, three.byId).clubs[1]).toBe(3);
 
     const four = votes(shape(1));
-    expect(crowdXI(four.t, four.byId).clubBreaches).toEqual(["1"]);
+    expect(crowdXI(four.t, four.byId).clubs[1]).toBe(4);
   });
 
-  it("leaves clubBreaches empty when nothing is over-picked", () => {
+  it("never caps a club's count — nothing about the XI is capped", () => {
     const { byId, t } = votes([
       ...gkps,
       ...many(2, [9, 8, 7, 6, 5]),
       ...many(3, [9, 8, 7, 6, 5]),
       ...many(4, [9, 8, 7]),
     ]);
-    expect(crowdXI(t, byId).clubBreaches).toEqual([]);
+    const counts = Object.values(crowdXI(t, byId).clubs);
+    expect(counts.reduce((a, b) => a + b, 0)).toBe(11);
   });
 
   it("names the most-captained player, and the vice separately", () => {

@@ -366,6 +366,12 @@ export function ranked(
  * The crowd XI: the most-picked player at each position, then the next, and so
  * on — constrained only by what makes a legal formation, so the shape comes out
  * of the votes rather than being fixed in advance.
+ *
+ * It is a hall of fame, not a squad. No budget, no bench, no club cap: those
+ * constrain what each viewer may *pick* — `validateEntry` enforces them on every
+ * entry — but the aggregate of those picks answers a different question, which
+ * is who the crowd wants in each position. A crowd XI costing £130m with six
+ * Liverpool players is a correct result, not a bug to fix.
  */
 export function crowdXI(
   t: Tally,
@@ -429,7 +435,7 @@ export function crowdXI(
     captain: ranked(t.captain, t.n, byId)[0] ?? null,
     vice: ranked(t.vice, t.n, byId)[0] ?? null,
     cost,
-    clubBreaches: Object.entries(clubs).filter(([, n]) => n > MAXCLUB).map(([team]) => team),
+    clubs,
   };
 }
 

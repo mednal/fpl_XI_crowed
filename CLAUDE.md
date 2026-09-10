@@ -77,10 +77,18 @@ light/dark palette. No Tailwind, no CSS-in-JS — match that.
    (`pools.formation`, one of `FORMS`) gets exactly that shape, each row filled by
    its own most-picked players; it changes the board only, never what a viewer may
    pick. Never hard-code a shape anywhere else.
-4. **Deadlines lock writes.** Entries are rejected once `pools.deadline` has passed.
-5. **`supabase/schema.sql` must stay re-runnable.** It is guarded with
+4. **The crowd XI is a hall of fame, not a squad.** Budget, bench and club cap
+   constrain what a viewer may *pick* — `validateEntry()` enforces all three on every
+   entry, and that must never soften. They do not apply to the aggregate, which
+   answers a different question: who the crowd wants in each position. A crowd XI
+   costing £130m with six Liverpool players is a correct result. Never "fix" it by
+   filtering `crowdXI()`, and never present its cost or its club counts as a rule
+   being broken — dropping a player who won the vote makes the board show a team
+   nobody picked.
+5. **Deadlines lock writes.** Entries are rejected once `pools.deadline` has passed.
+6. **`supabase/schema.sql` must stay re-runnable.** It is guarded with
    `if not exists` / `drop policy if exists` throughout. Keep new statements guarded.
-6. **Pool ids** use an alphabet with no look-alike characters (`ALPHABET` in
+7. **Pool ids** use an alphabet with no look-alike characters (`ALPHABET` in
    `api/pools/route.ts`) because people read them aloud.
 
 ## Conventions

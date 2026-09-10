@@ -27,7 +27,17 @@ export async function GET(_req: Request, { params }: Ctx) {
     .eq("pool_id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ entries: data ?? [] });
+
+  // Every board watching a pool asks this same question and gets the same
+  // answer, so on a big stream the interesting number is not how often one
+  // viewer asks but how many ask at once. A couple of seconds at the edge
+  // turns a thousand simultaneous boards into one read, which is the half of
+  // the load the client cannot coalesce for itself. `max-age=0` keeps the
+  // browser revalidating, so nobody is served a stale pool from their own disk.
+  return NextResponse.json(
+    { entries: data ?? [] },
+    { headers: { "Cache-Control": "public, max-age=0, s-maxage=2, stale-while-revalidate=10" } },
+  );
 }
 
 export async function POST(req: Request, { params }: Ctx) {

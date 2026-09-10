@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { PitchRows, type SlotView } from "./Pitch";
 import { TeamMark } from "./Kit";
@@ -13,6 +13,20 @@ type Row = Pick<Entry, "id" | "nick" | "xi" | "bench" | "captain" | "vice" | "up
 
 /** How long a crossing stays lit on the pitch and in the rail. */
 const CROSS_MS = 1400;
+
+/**
+ * Realtime tells every open board about every team that lands, and a board
+ * answers by refetching the whole pool. On a stream with a real audience that
+ * is the entire entry list sent to everybody once per submission — the cost
+ * grows with viewers times teams, and it is invisible until the night it is
+ * not. So a burst of arrivals is collapsed into one fetch rather than one
+ * each. Long enough to swallow a rush at the deadline, short enough that the
+ * board still reads as live.
+ */
+const COALESCE_MS = 1500;
+
+/** The websocket backstop, and the longest the board can sit on stale teams. */
+const POLL_MS = 15000;
 
 /** How many outside-the-XI names per position reach the rail. Past the fifth at
  *  a position the support is a viewer or two each — noise rather than a vote.
@@ -64,38 +78,77 @@ export default function LiveBoard({
     return () => clearInterval(t);
   }, [deadline]);
 
-  const refresh = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/pools/${pool.id}/entries`, { cache: "no-store" });
-      if (!res.ok) return;
-      const data = await res.json();
-      setEntries(data.entries ?? []);
-    } catch { /* a dropped poll is harmless; the next one catches up */ }
-  }, [pool.id]);
-
   useEffect(() => {
-    const supabase = getBrowserClient();
+    let stopped = false;
+    let inFlight = false;
+    let queued = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let lastAt = Date.now();
 
-    // Realtime pushes each new team the moment it lands. Polling every 15s is
-    // the backstop for viewers behind proxies that block websockets.
+    const run = async () => {
+      timer = null;
+      if (stopped) return;
+      // A fetch already on the wire will return the newer team anyway, so a
+      // second one alongside it would ask the same question twice.
+      if (inFlight) { queued = true; return; }
+      inFlight = true;
+      try {
+        const res = await fetch(`/api/pools/${pool.id}/entries`);
+        if (res.ok && !stopped) {
+          const data = await res.json();
+          setEntries(data.entries ?? []);
+        }
+      } catch {
+        /* a dropped refresh is harmless; the backstop below catches up */
+      } finally {
+        inFlight = false;
+        lastAt = Date.now();
+        if (queued && !stopped) { queued = false; schedule(); }
+      }
+    };
+
+    const schedule = () => {
+      if (stopped || timer) return;
+      timer = setTimeout(run, COALESCE_MS);
+    };
+
+    const supabase = getBrowserClient();
     const channel = supabase
       ?.channel(`pool-${pool.id}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "entries", filter: `pool_id=eq.${pool.id}` },
-        () => { void refresh(); },
+        schedule,
       )
       .subscribe();
 
-    const poll = setInterval(() => { void refresh(); }, 15000);
+    // The backstop for viewers behind proxies that block websockets. It asks
+    // only when realtime has gone quiet, so a board that is receiving events
+    // never spends a request on it.
+    const poll = setInterval(() => {
+      if (Date.now() - lastAt >= POLL_MS) schedule();
+    }, POLL_MS);
+
     return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
       clearInterval(poll);
       if (channel) void channel.unsubscribe();
     };
-  }, [pool.id, refresh]);
+  }, [pool.id]);
 
   const t = useMemo(() => tally(entries as never), [entries]);
   const cx = useMemo(() => crowdXI(t, byId, pool.formation), [t, byId, pool.formation]);
+
+  // A club filling half the XI is the crowd showing its hand, not a rule being
+  // broken — the crowd XI is a hall of fame, so it has no club cap to break.
+  const stacked = useMemo(
+    () => Object.entries(cx.clubs)
+      .map(([team, n]) => [Number(team), n] as const)
+      .filter(([, n]) => n >= 4)
+      .sort((a, b) => b[1] - a[1]),
+    [cx.clubs],
+  );
 
   /**
    * The whole point of the board: a player crossing into the XI is the moment
@@ -246,13 +299,13 @@ export default function LiveBoard({
         </dl>
         <span className="sep" />
         <dl>
-          <dt className="lab">On the pitch</dt>
+          <dt className="lab">XI value</dt>
           <dd className="sm num">{money(cx.cost)}</dd>
         </dl>
         <span className="spacer" />
-        {cx.clubBreaches.length > 0 && (
-          <span className="chip warn">
-            Over 3 from {cx.clubBreaches.map((id) => teams.get(Number(id))?.sh).join(", ")}
+        {stacked.length > 0 && (
+          <span className="chip">
+            {stacked.map(([id, n]) => `${n} ${teams.get(id)?.sh ?? "?"}`).join(" · ")}
           </span>
         )}
       </div>

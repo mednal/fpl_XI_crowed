@@ -457,7 +457,7 @@ export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap
                   className="prow" key={p.id} disabled={locked || !!reason}
                   title={reason ?? undefined} onClick={() => place(p)}
                 >
-                  <Kit team={teams.get(p.team)} className="kit kitmini" />
+                  <Kit team={teams.get(p.team)} className="kit kitmini" mark={false} />
                   <span className="who">
                     {/* A long name ellipsises in a narrow rail; hovering it gives
                         the whole thing back, unless the row already owes the

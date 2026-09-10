@@ -88,5 +88,8 @@ export type CrowdXI = {
   captain: Ranked | null;
   vice: Ranked | null;
   cost: number;
-  clubBreaches: string[];
+  /** How many of the XI each club supplied, by team id. A fact about the vote,
+   *  not a rule: the crowd XI is a hall-of-fame XI, so no club cap applies to
+   *  it. The board decides what counts as worth pointing out. */
+  clubs: Record<number, number>;
 };
