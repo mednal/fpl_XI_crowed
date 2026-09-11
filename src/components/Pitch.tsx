@@ -87,10 +87,19 @@ export function PitchRows({
   );
 }
 
-export function Bench({ cells, teams }: { cells: SlotView[]; teams: Map<number, Team> }) {
+export function Bench({
+  cells,
+  teams,
+  label,
+}: {
+  cells: SlotView[];
+  teams: Map<number, Team>;
+  /** What the row is, when it is not the viewer's own bench. */
+  label?: string;
+}) {
   return (
     <div className="bench">
-      <div className="benchlabel lab">Bench · substitutes in order</div>
+      <div className="benchlabel lab">{label ?? "Bench · substitutes in order"}</div>
       <div className="row">
         {cells.map((c, j) => (
           <Slot view={c} teams={teams} key={j} />

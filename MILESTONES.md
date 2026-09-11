@@ -160,6 +160,44 @@ then defenders, midfielders, forwards — which is the order auto-subs come on i
 picker now lets a viewer substitute freely and reorder substitutes *within* a position,
 but not rank the three outfield substitutes against each other the way real FPL does.
 
+## M3b — Transfer pools ✅ built, schema pending
+
+The second question the product can ask. The host's own team goes up and the crowd
+votes on the transfers, which is the format a channel with an FPL team of its own
+actually wants: their squad on screen, and the audience arguing about one swap.
+
+- [x] `pools.kind`, `pools.squad`, `pools.moves` and a `transfers` table, all
+      guarded alters and drop-if-exists in the existing style, with the same
+      column-privilege treatment `entries` gets — the anon key sees
+      `id, pool_id, updated_at` and nothing else — and the same realtime publication.
+- [x] `src/lib/transfers.ts`: the sibling of `squad.ts` for the other pool kind.
+      Pure, no I/O, imported by browser and server. A transfer is a position-matched
+      pair, which is forced by the squad staying 2/5/5/3 rather than chosen for
+      convenience, and is what makes the headline stat countable.
+- [x] Import a real FPL team. Both endpoints (`entry/{id}/` and
+      `entry/{id}/event/{gw}/picks/`) are unauthenticated and were checked live.
+      Selling prices are not among them — those need the manager's own login — so a
+      player is valued at today's price and the screens say so. The bank is real.
+- [x] Build the team by hand instead, reusing `TeamPicker` rather than a second
+      copy of the squad rules.
+- [x] The viewer's screen: tap a shirt to sell, the rail becomes the players who
+      could replace him, the money and the club cap are live. Voting to make *no*
+      transfer is a first-class answer, and the board reports it as a share.
+- [x] The board: the resulting team on the pitch, the ranked swaps, who the crowd
+      wants out, who they want in, and the armband vote. Realtime, coalesced the
+      same way the XI board's is.
+- [x] 43 tests over the new rules and crowd maths, including that the browser's
+      checklist and the server's validation report exactly the same failures.
+- [ ] **Run the new SQL in Supabase.** Nothing that touches the database works
+      until this is done — including creating an ordinary crowd pool, since the
+      insert now names `kind` and `moves`.
+- [ ] A real run: import a team, vote from several browsers, watch the board move.
+
+**Done when:** a host can put their real FPL team up and watch the crowd's transfers
+rank themselves live.
+
+---
+
 ## M4 — Artwork
 
 Everything is drawn in code today: `KIT_ASSETS` and `BADGE_ASSETS` are empty and
@@ -179,7 +217,29 @@ live board looks right full-screen.
 
 ## M5 — Ship it
 
-- [ ] Delete `demo/` — the superseded prototype
+- [x] Delete `demo/` — the superseded prototype
+      Gone, along with the tooling scratch that had been committed by accident
+      (`.impeccable/`, a stackdump, two temp scripts), now gitignored.
+- [x] The link has a face. This product is one link pasted into a chat, so the
+      preview card is the first thing most viewers see of it. `src/app/icon.svg`
+      is the tab mark, and `src/lib/og.tsx` renders the 1200×630 card in the
+      board's own palette and typefaces — Anton and Barlow, fetched at render
+      time and degrading to a default face if Google does not answer, like every
+      other outside call here. `/p/[id]` gets its own card naming the pool, and
+      its own title, because that is the URL that actually gets shared.
+      `metadataBase` comes from `NEXT_PUBLIC_SITE_URL` or Vercel's own variable —
+      a preview card needs absolute URLs, and the deployment has to know its
+      address to write them.
+- [x] `error.tsx` and `not-found.tsx`, in the board's clothes. Next's defaults are
+      a stack trace and a bare 404, and the page they would replace is the one
+      pointed at a camera.
+- [x] A lint that runs. `npm run lint` was a script with no linter behind it;
+      eslint 9 with `next/core-web-vitals` now backs it and CI runs it between the
+      tests and the build. Its first pass found dead state in `LiveBoard`, a dead
+      helper beside it, an unused memo in `TeamPicker`, and six `any`s in
+      `fpl.ts` — the last are now named types for the slice of the FPL payload we
+      read, so a field disappearing upstream is a type error rather than an
+      undefined on the board.
 - [ ] Full pass on a real gameweek: create a pool, submit from several browsers, watch
       the live screen update, check the leaderboard after the deadline
 - [ ] Deploy to Vercel with the four environment variables set — the three Supabase
@@ -281,7 +341,10 @@ there is anything to pay. Gated on M5 shipping and real hosts having used the fr
 product on a real gameweek — what they complain about is allowed to reorder this list.
 
 - [ ] **Host key and pool ownership.** No accounts yet. Unlocks the recovery link and
-      the first host-only surface.
+      the first host-only surface. Half-landed already: `pools.host_voter` makes the
+      browser that opened a pool its host, which is what the closing time and the
+      close-now button on the board are checked against. What is still missing is a
+      key the host can carry to another browser, and the recovery link built on it.
 - [ ] **Host accounts, by claim.** Magic link and Google. Host-key pools become
       claimable; the owner column starts being populated.
 - [ ] **Branding and the OBS overlay.** Per-host `CHANNEL_LOGO`, plus the transparent

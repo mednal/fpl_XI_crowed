@@ -5,13 +5,14 @@ import Link from "next/link";
 import { Bench, PitchRows, type SlotView } from "./Pitch";
 import { Kit, TeamMark } from "./Kit";
 import { Countdown } from "./Countdown";
+import { lockNote, poolLock } from "@/lib/lock";
 import {
   BUDGET, FORMS, MAXCLUB, POS, POSITIONS, POSLONG, SQUAD,
-  applySwap, benchIds, cheapestPerPos, clubCount, cloneSquad, money, newSquad,
+  applySwap, benchIds, clubCount, cloneSquad, money, newSquad,
   removeFromSquad, spent, squadIds, squadChecklist, startCount, swapFormation,
   xiIds, type SlotRef, type Squad,
 } from "@/lib/squad";
-import type { Bootstrap, Player, PosId, Pool } from "@/lib/types";
+import type { Bootstrap, HostSquad, Player, PosId, Pool } from "@/lib/types";
 
 type Menu = { pos: PosId; index: number; anchor: HTMLElement } | null;
 
@@ -49,10 +50,25 @@ const SORTS: [string, string][] = [
   ["cheap", "Sort: price low"],
 ];
 
-export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap }) {
+/**
+ * The picker does two jobs. Normally it is a viewer building their entry. In a
+ * transfer pool it is also how a host builds the team the crowd will vote on,
+ * when they would rather not import one — same rules, same pitch, a different
+ * place for the finished fifteen to go. `onHostSave` is what says which: given,
+ * the squad is handed back instead of being sent to the entries route.
+ */
+export default function TeamPicker({
+  pool,
+  boot,
+  onHostSave,
+}: {
+  pool: Pool;
+  boot: Bootstrap;
+  onHostSave?: (squad: HostSquad) => Promise<void> | void;
+}) {
+  const hosting = Boolean(onHostSave);
   const byId = useMemo(() => new Map(boot.players.map((p) => [p.id, p])), [boot.players]);
   const teams = useMemo(() => new Map(boot.teams.map((t) => [t.id, t])), [boot.teams]);
-  const minCost = useMemo(() => cheapestPerPos(boot.players), [boot.players]);
 
   // A host who fixed a shape for the board gets that shape on the pitch too, so
   // the link opens on the eleven positions their crowd XI is drawn in. It is a
@@ -79,18 +95,24 @@ export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap
   const menuRef = useRef<HTMLDivElement | null>(null);
   const bannerRef = useRef<HTMLDivElement | null>(null);
 
-  const locked = pool.deadline ? new Date(pool.deadline).getTime() < Date.now() : false;
+  // The picker's copy of the verdict, so a viewer arriving at a pool that has
+  // already shut is told so instead of being shown a Send button. The entries
+  // route decides for real.
+  const lock = poolLock(pool);
+  // A host setting the team up is not voting, so a pool that has already shut
+  // still lets them finish putting it together.
+  const locked = lock.locked && !hosting;
 
   useEffect(() => {
     try {
       setNick(localStorage.getItem("cxi.nick") ?? "");
-      const saved = localStorage.getItem(`cxi.squad.${pool.id}`);
+      const saved = localStorage.getItem(draftKey(pool.id, hosting));
       if (saved) {
         const parsed = JSON.parse(saved) as Squad;
         if (parsed?.p) { setSq(parsed); setSent(true); }
       }
     } catch { /* a fresh browser simply starts empty */ }
-  }, [pool.id]);
+  }, [pool.id, hosting]);
 
   // Narrow screens stack the send panel below the pitch, so the confirmation
   // lands off-screen above the button that was just pressed. `nearest` leaves
@@ -291,6 +313,32 @@ export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap
     if (todo.length) { setNags((n) => n + 1); return; }
     setBusy(true);
     setError(null);
+
+    // The host's own team goes back to the setup screen, which saves it on the
+    // pool. Everything above this point is the same fifteen players under the
+    // same rules — only where they end up differs.
+    if (onHostSave) {
+      try {
+        await onHostSave({
+          formation: sq.formation,
+          xi: xiIds(sq),
+          bench: benchIds(sq),
+          captain: sq.captain!,
+          vice: sq.vice!,
+          // A team built here is built inside the budget, so whatever is left
+          // of it is the bank the crowd gets to spend.
+          bank: Math.max(0, BUDGET - spent(sq, byId)),
+        });
+        try {
+          localStorage.setItem(draftKey(pool.id, true), JSON.stringify(sq));
+        } catch { /* storage off — the team is on the pool either way */ }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not save that team.");
+      }
+      setBusy(false);
+      return;
+    }
+
     try {
       const body = {
         nick: nick.trim() || "Anonymous",
@@ -309,7 +357,7 @@ export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap
       if (!res.ok) throw new Error(data.error ?? "Could not send your team.");
       try {
         localStorage.setItem("cxi.nick", body.nick);
-        localStorage.setItem(`cxi.squad.${pool.id}`, JSON.stringify(sq));
+        localStorage.setItem(draftKey(pool.id, false), JSON.stringify(sq));
       } catch { /* storage off — the team is saved on the server either way */ }
       // Sending does not take the viewer anywhere: the squad on screen is the
       // one on the server, and they can keep editing it until the deadline.
@@ -349,16 +397,16 @@ export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap
           <span className="lab">Picked</span>
           <b className="num">{ids.length}/15</b>
         </span>
-        <Link className="btn btn-sm" href={`/p/${pool.id}/live`}>Results</Link>
+        {!hosting && (
+          <Link className="btn btn-sm" href={`/p/${pool.id}/live`}>Results</Link>
+        )}
       </header>
 
       <main className="frame">
         {locked && (
-          <p className="locked-note">
-            The deadline has passed — teams for this gameweek are locked.
-          </p>
+          <p className="locked-note">{lockNote(lock.why)}</p>
         )}
-        {!locked && sent && (
+        {!locked && sent && !hosting && (
           <div className="banner saved" key={saves} ref={bannerRef} aria-live="polite">
             {saves > 1 ? "Team updated." : "Your team is in."} Change it any time before
             the deadline.
@@ -402,7 +450,7 @@ export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap
         {pool.budget
           ? <span className={`chip${bank < 0 ? " warn" : ""}`}>Squad {money(spent(sq, byId))}</span>
           : <span className="chip">No budget</span>}
-        {pool.deadline && <Countdown deadline={pool.deadline} />}
+        {pool.deadline && <Countdown deadline={pool.deadline} closed={Boolean(pool.closed_at)} />}
       </div>
 
       <aside className={`churn${sort === "pts" || sort === "form" ? " ptsort" : ""}`}>
@@ -483,18 +531,22 @@ export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap
         </section>
 
         <section className="mod send">
-          <h2 className="vh">{sent ? "Update your team" : "Send your team"}</h2>
+          <h2 className="vh">
+            {hosting ? "Put this team up" : sent ? "Update your team" : "Send your team"}
+          </h2>
           <div className="modbody">
             {locked ? (
               <p className="err">Voting is closed for this gameweek.</p>
             ) : (
               <>
-                <input
-                  id="nick" type="text" value={nick} disabled={locked}
-                  aria-label="Your name on the leaderboard"
-                  onChange={(e) => setNick(e.target.value)}
-                  placeholder="Your name on the leaderboard"
-                />
+                {!hosting && (
+                  <input
+                    id="nick" type="text" value={nick} disabled={locked}
+                    aria-label="Your name on the leaderboard"
+                    onChange={(e) => setNick(e.target.value)}
+                    placeholder="Your name on the leaderboard"
+                  />
+                )}
                 <p
                   className={`todo-note${nags ? " nudge" : ""}`}
                   id="ready-list" key={nags} aria-live="polite"
@@ -522,9 +574,19 @@ export default function TeamPicker({ pool, boot }: { pool: Pool; boot: Bootstrap
               aria-describedby={locked ? undefined : "ready-list"}
               title={todo.length ? todo.map((c) => c.label).join(" ") : undefined}
             >
-              {busy ? "Sending…" : todo.length ? sendBlurb(todo.length) : sent ? "Update my team" : "Submit my team"}
+              {busy
+                ? hosting ? "Saving…" : "Sending…"
+                : todo.length
+                  ? sendBlurb(todo.length)
+                  : hosting
+                    ? "Put this team up"
+                    : sent ? "Update my team" : "Submit my team"}
             </button>
-            <p className="hint">Tap a shirt for the armband or a substitution.</p>
+            <p className="hint">
+              {hosting
+                ? "Tap a shirt for the armband or a substitution. Your bench order is the order your subs come on in."
+                : "Tap a shirt for the armband or a substitution."}
+            </p>
           </div>
         </section>
       </aside>
@@ -575,4 +637,11 @@ function MenuButton({ children, onClick }: { children: React.ReactNode; onClick:
       {children}
     </button>
   );
+}
+
+/** Where a half-built squad is kept between visits. A host's base team and
+ *  their own entry are two different squads in the same pool, so they cannot
+ *  share a key. */
+function draftKey(poolId: string, hosting: boolean): string {
+  return hosting ? `cxi.host.${poolId}` : `cxi.squad.${poolId}`;
 }

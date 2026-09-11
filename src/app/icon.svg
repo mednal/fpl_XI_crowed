@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- The mark has to survive 16px in a tab strip, so the XI is drawn as bars
+       rather than set in a typeface: a favicon cannot rely on a webfont. -->
+  <rect width="32" height="32" rx="7" fill="#141020"/>
+  <g fill="#FF3D7F">
+    <rect x="11.5" y="8.2" width="3.4" height="15.6" rx="1.2" transform="rotate(33 13.2 16)"/>
+    <rect x="11.5" y="8.2" width="3.4" height="15.6" rx="1.2" transform="rotate(-33 13.2 16)"/>
+    <rect x="21.6" y="8.2" width="3.4" height="15.6" rx="1.2"/>
+  </g>
+</svg>

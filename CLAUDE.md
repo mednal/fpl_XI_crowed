@@ -4,10 +4,21 @@ Context for Claude Code working in this repo. Keep it short — it loads every s
 
 ## What this is
 
-**Crowd XI.** A host shares one link; every viewer builds a real FPL squad; the
-most-picked XI and captain appear live on a results screen the host puts on stream.
-Next.js 15 (App Router) + React 19 + Supabase. No auth — identity is a random id in
-the viewer's browser.
+**Crowd XI.** A host shares one link and the audience votes on a team. Next.js 15
+(App Router) + React 19 + Supabase. No auth — identity is a random id in the
+viewer's browser.
+
+There are two kinds of pool, and `pools.kind` says which:
+
+- **`crowd`** — the original. Every viewer builds a real FPL squad; the most-picked
+  XI and captain appear live on a results screen the host puts on stream.
+- **`transfer`** — the host's *own* team goes up, imported from FPL or built here,
+  and the crowd votes on the transfers they should make. The board ranks who the
+  crowd wants out, who they want in, and the most-backed swap: "Haaland → João
+  Pedro, 10%".
+
+The two share the pool, the lock, the identity cookie, the pitch and the rail. What
+differs is the question, so they have separate rule modules, tables and screens.
 
 Player data, prices and deadlines come from the official FPL API, which is
 unauthenticated and can go down. Every path that touches it must degrade, not crash.
@@ -52,12 +63,30 @@ Browser ──picks squad──> POST /api/pools/[id]/entries ──validated─
 - **`src/lib/fpl.ts`** — FPL API, trimmed and cached. The raw payload is ~2.3MB, over
   Next's 2MB response-cache limit, so it is fetched `no-store`, cut to ~100KB, and
   *that* is wrapped in `unstable_cache`. Do not naively cache the fetch.
+- **`src/lib/transfers.ts`** — everything a transfer pool decides: what a legal
+  transfer is, what it costs, and the crowd maths over the votes. Pure, imported by
+  both the browser and the server, and the sibling of `squad.ts` — the same
+  arrangement, for the other kind of pool. Under test.
+- **`src/lib/lock.ts`** — whether a pool is still taking teams, and what closing
+  time a host may set. Pure, and imported by the picker, the board and the routes,
+  so none of them can disagree about a pool being open. Under test.
 - **`src/lib/pools.ts`** — DB reads, `server-only`.
 - **`src/lib/scores.ts`** — the leaderboard, `server-only`. Read by both the scores
   page and its API route so the two can never disagree about who won.
+- **`src/lib/og.tsx`** — the link-preview card, drawn with `next/og` in the board's
+  palette. `src/app/opengraph-image.tsx` is the site card, `src/app/p/[id]/` the
+  per-pool one. Absolute URLs need `metadataBase`, set in the root layout.
 - **`src/app/api/`** — every write. The browser never writes to Supabase directly.
-- **`src/components/`** — `TeamPicker` (picking), `LiveBoard` (results), `Scoreboard`
-  (the leaderboard), `Pitch`/`Kit` (drawn shirts), `assets.ts` (artwork manifest).
+- **`src/components/`** — `TeamPicker` (picking; also builds a host's base team when
+  given `onHostSave`), `LiveBoard` (results), `Scoreboard` (the leaderboard),
+  `TransferPicker`/`TransferBoard`/`HostSetup` (the transfer pool's three screens),
+  `SquadPitch` (a whole fifteen drawn read-only, shared by all three),
+  `Pitch`/`Kit` (drawn shirts), `assets.ts` (artwork manifest).
+
+A transfer pool's own pieces: `POST /api/pools` takes `kind` and `moves`;
+`PATCH /api/pools/[id]` takes the host's `squad`; `POST /api/pools/[id]/transfers`
+is the vote; `GET /api/fpl/entry/[id]` imports a real FPL team. The host sets up at
+`/p/[id]/setup`, viewers vote at `/p/[id]`, and the board is the same `/p/[id]/live`.
 
 Styling is plain CSS in `src/app/globals.css` with CSS custom properties and a
 light/dark palette. No Tailwind, no CSS-in-JS — match that.
@@ -85,11 +114,37 @@ light/dark palette. No Tailwind, no CSS-in-JS — match that.
    filtering `crowdXI()`, and never present its cost or its club counts as a rule
    being broken — dropping a player who won the vote makes the board show a team
    nobody picked.
-5. **Deadlines lock writes.** Entries are rejected once `pools.deadline` has passed.
+5. **Deadlines lock writes, and so does the host.** A pool shuts at
+   `pools.deadline` — the official FPL deadline unless the host chose an earlier
+   one, and never a later one, because past it the game has started — or the
+   moment the host sets `pools.closed_at` from the board. `poolLock()` is the
+   single answer to "is this pool open"; the entries route is where it counts and
+   the picker's copy only saves a round trip. There are no accounts, so the host
+   is the browser that opened the pool: `pools.host_voter` holds its signed viewer
+   id and `PATCH /api/pools/[id]` checks the cookie against it before moving a
+   deadline or closing anything.
 6. **`supabase/schema.sql` must stay re-runnable.** It is guarded with
    `if not exists` / `drop policy if exists` throughout. Keep new statements guarded.
 7. **Pool ids** use an alphabet with no look-alike characters (`ALPHABET` in
    `api/pools/route.ts`) because people read them aloud.
+8. **A transfer is a position-matched pair.** `out_ids[i]` is sold to sign
+   `in_ids[i]`, and the two are always the same position. This is not a
+   simplification: a squad must stay 2/5/5/3, so the positions leaving and arriving
+   have to match as multisets, and every legal set of transfers can therefore be
+   written as pairs. Writing them that way is what makes "Haaland → João Pedro, 10%"
+   countable rather than a guess at which sale paid for which signing.
+9. **The crowd's transfers are a vote, not a plan.** `crowdTransfers()` applies the
+   winning swaps in vote order, up to the pool's allowance, skipping only those that
+   need a player an earlier swap already used — nobody is sold or signed twice.
+   It never drops a swap for being unaffordable or for stacking a club: that is
+   invariant 4 again, seen from the other side. The resulting bank and club counts
+   come back alongside for the board to point at, and a negative bank is *reported*.
+   Replacing the winner with the runner-up would put a transfer on stream that
+   nobody voted for.
+10. **Selling prices are today's prices.** FPL only reveals a player's selling price
+    to the manager who owns him, behind his login, so `transfers.ts` values a player
+    at his current price on both sides of the trade. The bank is real — it comes
+    back with the imported picks. The screens say so rather than assuming quietly.
 
 ## Conventions
 
@@ -103,9 +158,18 @@ light/dark palette. No Tailwind, no CSS-in-JS — match that.
 ## Current state
 
 Working end to end: pool creation, picking, server-side validation, live crowd XI,
-realtime updates, and the leaderboard at `/p/[id]/scores`. Schema is applied and both
-Supabase keys are verified. M1 (identity, rate limiting), M2 (`squad.ts` under test,
-CI) and M3 (the leaderboard screen, with real auto-subs) are done; artwork is next.
+realtime updates, host controls (a custom closing time and a close-now button on
+the board), and the leaderboard at `/p/[id]/scores`. Both Supabase keys are verified.
+
+**Transfer pools are built but their schema is not applied.** The code, the rules
+and the tests are in; the `pools` columns and the `transfers` table at the bottom of
+`supabase/schema.sql` still have to be run in the Supabase SQL editor. Until they
+are, *every* pool creation fails, because the insert now names `kind` and `moves`. M1 (identity, rate limiting), M2 (`squad.ts` under test,
+CI) and M3 (the leaderboard screen, with real auto-subs) are done. M5 has started
+ahead of the artwork: the prototype is deleted, the link has an icon and a preview
+card, `error.tsx`/`not-found.tsx` wear the board's clothes, and `npm run lint` has a
+linter behind it and runs in CI. What is left there is the real-gameweek pass, the
+Vercel deploy and the key rotation.
 
 **What we are going to do:** finish the product properly before it goes near a real
 audience — close the security holes, get the rules under test, build the leaderboard
@@ -115,8 +179,6 @@ items off there as they land.
 
 ## Gotchas
 
-- `demo/` is the earlier single-file prototype. It is excluded from `tsconfig` and is
-  not part of the build. Do not edit it; it gets deleted in Milestone 5.
 - `next dev` will silently pick port 3001 if 3000 is busy. Check the log before
   assuming which server you are hitting.
 - Auto-subs and the vice-captain fallback only apply once the FPL event is **settled**

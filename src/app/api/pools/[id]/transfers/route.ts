@@ -5,12 +5,13 @@ import { getServiceClient } from "@/lib/supabase";
 import { VOTER_COOKIE, VOTER_COOKIE_OPTIONS, mintVoter, readVoter } from "@/lib/identity";
 import { lockNote, poolLock } from "@/lib/lock";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
-import { validateEntry } from "@/lib/squad";
-import type { EntryInput, Player } from "@/lib/types";
+import { DEFAULT_MOVES, validateTransfer } from "@/lib/transfers";
+import type { HostSquad, Player, TransferInput } from "@/lib/types";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-// A viewer edits their team freely; this only stops a script hammering the route.
+// The same brake the entries route carries: a viewer changes their mind freely,
+// a script does not get to sit on the route.
 const LIMIT = 30;
 const WINDOW = 10 * 60 * 1000;
 
@@ -23,20 +24,17 @@ export async function GET(_req: Request, { params }: Ctx) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
   const { data, error } = await supabase
-    .from("entries")
-    .select("id, nick, formation, xi, bench, captain, vice, updated_at")
+    .from("transfers")
+    .select("id, nick, out_ids, in_ids, captain, updated_at")
     .eq("pool_id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Every board watching a pool asks this same question and gets the same
-  // answer, so on a big stream the interesting number is not how often one
-  // viewer asks but how many ask at once. A couple of seconds at the edge
-  // turns a thousand simultaneous boards into one read, which is the half of
-  // the load the client cannot coalesce for itself. `max-age=0` keeps the
-  // browser revalidating, so nobody is served a stale pool from their own disk.
+  // Every board watching one pool asks this identical question, so a couple of
+  // seconds at the edge turns a room full of them into a single read. The same
+  // trade the entries route makes, for the same reason.
   return NextResponse.json(
-    { entries: data ?? [] },
+    { transfers: data ?? [] },
     { headers: { "Cache-Control": "public, max-age=0, s-maxage=2, stale-while-revalidate=10" } },
   );
 }
@@ -44,31 +42,29 @@ export async function GET(_req: Request, { params }: Ctx) {
 export async function POST(req: Request, { params }: Ctx) {
   const { id } = await params;
 
-  const limit = rateLimit(`entries:${clientIp(req)}`, LIMIT, WINDOW);
+  const limit = rateLimit(`transfers:${clientIp(req)}`, LIMIT, WINDOW);
   if (!limit.ok) {
     return NextResponse.json(
-      { error: "Too many submissions from this connection. Wait a minute and send your team again." },
+      { error: "Too many submissions from this connection. Wait a minute and send your transfers again." },
       { status: 429, headers: { "Retry-After": String(limit.retryAfter) } },
     );
   }
 
-  let body: EntryInput;
+  let body: TransferInput;
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Send a JSON body." }, { status: 400 });
   }
 
-  // Identity comes from the signed cookie, never from the body: an id read off
-  // the entries table is useless without the signature, so nobody can submit
-  // over somebody else's team.
+  // Identity comes from the signed cookie and never from the body, so an id
+  // read off the table cannot be used to vote over somebody else.
   let voter: string | null;
   let mintedCookie: string | null = null;
   try {
     const jar = await cookies();
     voter = await readVoter(jar.get(VOTER_COOKIE)?.value);
     if (!voter) {
-      // First visit, or a cookie we did not sign. Issue a fresh one and use it.
       mintedCookie = await mintVoter();
       voter = await readVoter(mintedCookie);
     }
@@ -91,16 +87,27 @@ export async function POST(req: Request, { params }: Ctx) {
 
   const { data: pool, error: poolErr } = await supabase
     .from("pools")
-    .select("id, budget, deadline, closed_at")
+    .select("id, kind, budget, moves, squad, deadline, closed_at")
     .eq("id", id)
     .maybeSingle();
 
   if (poolErr) return NextResponse.json({ error: poolErr.message }, { status: 500 });
   if (!pool) return NextResponse.json({ error: "That pool does not exist." }, { status: 404 });
+  if (pool.kind !== "transfer") {
+    return NextResponse.json(
+      { error: "This pool asks for a whole team, not transfers. Pick your XI instead." },
+      { status: 400 },
+    );
+  }
 
-  // Voting closes at the pool's deadline — the game's, unless the host set an
-  // earlier one — or the moment the host shuts it by hand. This is the decision
-  // that counts: the picker's copy of it is only there to save a round trip.
+  const squad = pool.squad as HostSquad | null;
+  if (!squad) {
+    return NextResponse.json(
+      { error: "The host has not put their team up yet. Try again once they have." },
+      { status: 409 },
+    );
+  }
+
   const lock = poolLock(pool);
   if (lock.locked) {
     return NextResponse.json({ error: lockNote(lock.why) }, { status: 409 });
@@ -111,29 +118,36 @@ export async function POST(req: Request, { params }: Ctx) {
     players = (await getBootstrap()).players;
   } catch {
     return NextResponse.json(
-      { error: "The FPL API is not responding, so the squad could not be checked. Try again shortly." },
+      { error: "The FPL API is not responding, so those transfers could not be checked. Try again shortly." },
       { status: 503 },
     );
   }
 
   const byId = new Map(players.map((p) => [p.id, p]));
-  const errs = validateEntry(body, byId, pool.budget);
+  const out = Array.isArray(body.out) ? body.out.map(Number) : [];
+  const incoming = Array.isArray(body.in) ? body.in.map(Number) : [];
+  const captain = body.captain ? Number(body.captain) : null;
+
+  const errs = validateTransfer(
+    { out, in: incoming, captain },
+    squad,
+    byId,
+    { moves: pool.moves ?? DEFAULT_MOVES, budget: pool.budget !== false },
+  );
   if (errs.length) return NextResponse.json({ error: errs[0], errors: errs }, { status: 400 });
 
   const row = {
     pool_id: id,
     voter,
     nick: (body.nick ?? "").trim().slice(0, 40) || "Anonymous",
-    formation: body.formation,
-    xi: body.xi,
-    bench: body.bench,
-    captain: body.captain,
-    vice: body.vice,
+    out_ids: out,
+    in_ids: incoming,
+    captain,
     updated_at: new Date().toISOString(),
   };
 
-  // One entry per browser, which they may keep editing until the deadline.
-  const { error } = await supabase.from("entries").upsert(row, { onConflict: "pool_id,voter" });
+  // One vote per browser, editable until the pool shuts.
+  const { error } = await supabase.from("transfers").upsert(row, { onConflict: "pool_id,voter" });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const res = NextResponse.json({ ok: true });

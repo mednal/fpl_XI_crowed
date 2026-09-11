@@ -143,6 +143,30 @@ input::placeholder{color:var(--text-3)}
 .chip.good, .strip .chip.good{background:var(--mint-soft); color:var(--mint); border-color:transparent}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
 
+/* A chip the host can turn. It reads as the chips beside it until you reach
+   for it, because most of the time it is telling you the setting rather than
+   asking you to change it. */
+.chipsel{
+  display:inline-flex; align-items:center; gap:8px; padding:2px 4px 2px 10px; border-radius:99px;
+  background:rgba(255,255,255,.06); border:1px solid var(--frame-line);
+}
+.chipsel .lab{margin:0}
+.chipsel select, .hostbar select.hostsel{
+  background:none; border:0; color:var(--frame-text); font-family:"Barlow Condensed",sans-serif;
+  font-size:13px; font-weight:600; letter-spacing:.06em; padding:2px 4px; cursor:pointer;
+}
+.chipsel select option, .hostbar select.hostsel option{background:var(--frame-2); color:var(--frame-text)}
+.chipsel:has(select:disabled){opacity:.55}
+/* The base rule gives every select `width:100%`, which is right in a form
+   column and wrong in a bar: full width here pushes the select onto a row of
+   its own and the bar grows a third line, which the board pays for in pitch. */
+.hostbar select.hostsel{
+  border:1px solid var(--frame-line); border-radius:99px; padding:3px 8px;
+  width:auto; flex:0 0 auto;
+}
+.hostbar select.hostsel:hover:not(:disabled){border-color:var(--frame-text-2)}
+.hostbar select.hostsel:disabled{opacity:.55; cursor:default}
+
 /* ==========================================================================
    The composition: strip / frame / churn
    ========================================================================== */
@@ -156,6 +180,13 @@ input::placeholder{color:var(--text-3)}
 }
 /* The live board is a fixed frame: it must not scroll on camera. */
 .board.fixed{height:100dvh; min-height:0; overflow:hidden}
+/* The host's own strip, when the browser watching is the one that opened the
+   pool. It is a third full-width band rather than something floating over the
+   frame, because the board holds 100dvh and nothing may push the eleven. */
+.board.hosted{
+  grid-template-rows:var(--strip) auto minmax(0,1fr) auto;
+  grid-template-areas:"head head" "host host" "frame churn" "foot churn";
+}
 
 .strip{
   grid-area:head; display:flex; align-items:center; gap:12px; padding:0 16px;
@@ -233,6 +264,10 @@ input::placeholder{color:var(--text-3)}
     grid-template-columns:minmax(0,1fr);
     grid-template-rows:auto auto auto auto;
     grid-template-areas:"head" "frame" "foot" "churn";
+  }
+  .board.hosted{
+    grid-template-rows:auto auto auto auto auto;
+    grid-template-areas:"head" "host" "frame" "foot" "churn";
   }
   .board.fixed{height:auto; min-height:100dvh; overflow:visible}
   .churn{border-left:0; border-top:1px solid var(--frame-line)}
@@ -330,6 +365,16 @@ input::placeholder{color:var(--text-3)}
 .slot.target .plate{box-shadow:0 0 0 2px var(--frame), 0 0 0 5px var(--mint)}
 .slot.dim{opacity:.32; cursor:default}
 .slot.dim:hover .kit{transform:none}
+
+/* A player transferred out leaves a hole: the shirt goes faint, the position
+   takes the name plate back, and his struck-through name stays underneath so
+   the pitch still says who the gap is waiting on. */
+.slot.gap .kit{opacity:.2}
+.slot.gap .plate .sub.went{
+  background:var(--frame-2); color:var(--frame-text-2); text-decoration:line-through;
+}
+.slot.gap.aim .plate{box-shadow:0 0 0 2px var(--frame), 0 0 0 5px var(--mint)}
+.slot.gap.aim .plate .sub.went{background:var(--mint); color:#04150e}
 
 .badge{
   position:absolute; top:-5px; right:1px; width:25px; height:25px; border-radius:50%;
@@ -597,6 +642,133 @@ img.kit{object-fit:contain}
   display:flex; align-items:center; gap:11px; padding:12px 16px; margin:0;
   background:var(--hot); color:#fff; font-weight:600; font-size:14px;
 }
+/* The host's strip, under the header on the results board. It is on the screen
+   being streamed, so it keeps the frame's own voice rather than shouting: the
+   only loud thing here should be the pitch. */
+.hostbar{
+  grid-area:host; display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  font-size:13.5px; padding:7px 16px; background:var(--frame-2);
+  color:var(--frame-text-2); border-bottom:1px solid var(--frame-line);
+  min-width:0;
+}
+.hostbar .spacer{flex:1}
+.hostbar .state{font-weight:600; color:var(--frame-text)}
+.hostbar .err{color:var(--frame-hot); font-size:13px}
+.hostbar .dial{flex:0 0 auto}
+/* The bar sits between the strip and the pitch on a board that never scrolls,
+   so the panel has to float clear of it rather than push the eleven down. */
+.hostbar{position:relative; z-index:20}
+
+/* ==========================================================================
+   The closing-time dial
+
+   A pool is pinned to one gameweek and dies at its deadline, so the legal
+   closing times are only the minutes between now and that deadline. A month
+   grid would offer thirty days of which twenty-nine are refused; the runway is
+   the domain instead, and it rescales itself as the deadline approaches.
+   ========================================================================== */
+
+.dial{position:relative; display:inline-flex; min-width:0}
+
+.dialtrig{
+  display:inline-flex; align-items:baseline; gap:8px; min-width:0;
+  padding:7px 11px; border:1px solid var(--frame-line); border-radius:var(--r-sm);
+  background:rgba(255,255,255,.05); color:var(--frame-text);
+  transition:border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.dialtrig:hover:not(:disabled){background:rgba(255,255,255,.1); border-color:var(--frame-text-3)}
+.dialtrig:disabled{opacity:.45; cursor:not-allowed}
+.dial.open .dialtrig{border-color:var(--frame-text); background:rgba(255,255,255,.1)}
+/* The trigger is a strip meter that happens to be a button: condensed label
+   beside an Anton figure, the same pairing as every other number on the board. */
+.dialtrig .lab{color:var(--frame-text-3); flex:0 0 auto}
+.dialtrig .num{font-family:"Anton",sans-serif; font-size:19px; letter-spacing:.01em; flex:0 0 auto}
+/* Full-width in a form, hugging its content in the broadcast bar: the caret is
+   pushed to the far edge in the first case and sits next to the clock in the
+   second. */
+.dial-inline .dialtrig{width:100%}
+.dial-inline .dialtrig .spacer{flex:1}
+.dial-overlay .dialtrig{padding:5px 10px}
+.dial-overlay .dialtrig .spacer{width:1px}
+.dialcaret{width:12px; height:12px; align-self:center; color:var(--frame-text-3); flex:0 0 auto}
+.dial.open .dialcaret{transform:rotate(180deg)}
+.dialcaret{transition:transform var(--dur-fast) var(--ease)}
+
+.dialpanel{
+  display:flex; flex-direction:column; gap:12px; padding:13px 14px 14px;
+  background:var(--frame); color:var(--frame-text); border-radius:var(--r-md);
+  font-size:14px;
+}
+/* Floating: elevation is the shadow, so there is no border under it. */
+.dial-overlay .dialpanel{
+  position:absolute; z-index:60; top:calc(100% + 7px); left:0;
+  width:min(370px,calc(100vw - 28px));
+  box-shadow:0 14px 38px -12px rgba(0,0,0,.78);
+  animation:dialin var(--dur-fast) var(--ease) both;
+}
+/* Recessed into the rail instead: not elevated, so it takes the hairline. */
+.dial-inline{display:flex; flex-direction:column}
+.dial-inline .dialpanel{margin-top:8px; border:1px solid var(--frame-line)}
+@keyframes dialin{from{opacity:0; transform:translateY(-5px)} to{opacity:1; transform:none}}
+
+.dialsay{color:var(--frame-text-2); font-size:13.5px; line-height:1.45}
+
+/* The track is 40px of grab area around a 6px rail — a host reaching for this
+   mid-broadcast gets a target, not a hairline. */
+.dialtrack{position:relative; height:40px; margin:2px 0 0; touch-action:none; cursor:ew-resize}
+.dialrail{
+  position:absolute; left:0; right:0; top:50%; height:6px; margin-top:-3px;
+  background:rgba(255,255,255,.1); border-radius:2px;
+}
+.dialfill{
+  position:absolute; inset:0; border-radius:2px; background:var(--frame-hot);
+  transform-origin:left center; transition:transform var(--dur-fast) var(--ease);
+}
+.dialtrack.dragging .dialfill{transition:none}
+/* Midnight. Worth a mark only on a runway long enough to cross one. */
+.dialtick{position:absolute; top:-4px; bottom:-4px; width:1px; background:var(--frame-text-3); opacity:.6}
+/* Scale marks, so they sit under the rail's readings rather than beside them. */
+.dialday{
+  position:absolute; top:calc(50% + 8px); transform:translateX(-50%);
+  font-size:10.5px; letter-spacing:.14em; color:var(--frame-text-3); opacity:.8;
+  white-space:nowrap;
+}
+/* The gameweek's own lock, which is as far right as the handle can go. */
+.dialstop{position:absolute; right:-1px; top:-5px; bottom:-5px; width:3px; background:var(--frame-gold); border-radius:1px}
+
+.dialhandle{
+  position:absolute; top:50%; width:3px; height:24px; margin-top:-12px; margin-left:-1.5px;
+  background:var(--frame-text); border-radius:2px; box-shadow:0 3px 8px rgba(0,0,0,.65);
+  transition:left var(--dur-fast) var(--ease);
+}
+.dialtrack.dragging .dialhandle{transition:none}
+/* The grab area is wider than the playhead it draws. */
+.dialhandle::before{content:""; position:absolute; inset:-9px -15px}
+
+.dialends{display:flex; align-items:baseline; gap:9px; margin-top:2px}
+.dialends .lab{color:var(--frame-text-3)}
+.dialends .lab.stop{color:var(--frame-gold)}
+.dialends .spacer{flex:1}
+
+.dialsets{display:grid; grid-template-columns:repeat(auto-fit,minmax(118px,1fr)); gap:6px}
+.dialsets .pchip{padding:6px 11px; white-space:nowrap}
+.dialsets .pchip:disabled{opacity:.4; cursor:not-allowed}
+.dialsets .pchip:disabled:hover{background:rgba(255,255,255,.04); color:var(--frame-text-2)}
+
+.dialnote{color:var(--frame-text-2); font-size:13.5px; line-height:1.5}
+.dialfoot{display:flex; align-items:center; gap:9px; padding-top:11px; border-top:1px solid var(--frame-line)}
+
+/* On a phone the bar wraps, and a panel anchored to a trigger that has drifted
+   to the right of a row would open off the screen. So the dial takes a row of
+   its own and the panel simply matches it. */
+@media (max-width:620px){
+  .hostbar > .spacer{display:none}
+  .hostbar .dial{flex:1 1 100%}
+  .hostbar .dialtrig{width:100%}
+  .hostbar .dialtrig .spacer{flex:1}
+  .dial-overlay .dialpanel{width:100%; min-width:0}
+}
+
 .subbar{
   display:flex; align-items:center; gap:12px; flex-wrap:wrap; font-size:14px;
   padding:10px 16px; background:var(--gold); color:#241800; font-weight:500;
@@ -694,7 +866,9 @@ img.kit{object-fit:contain}
 @keyframes nudge{0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)}}
 
 .field{display:flex; flex-direction:column; gap:6px}
-.field label{
+.field.inline{display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:6px 10px}
+.field.inline > .hint{grid-column:1/-1}
+.field label, .field > .fieldlab{
   font-family:"Barlow Condensed",sans-serif; font-size:13px; font-weight:600;
   letter-spacing:.12em; text-transform:uppercase; color:var(--frame-text-2);
 }
@@ -864,18 +1038,45 @@ img.kit{object-fit:contain}
 /* The rail is the picking surface, so the list is what the rail is for. The
    send module carries no heading and no field label — the button and the
    placeholder say those words already — which is the height the list gets back.
-   Overflow is hidden on the growing module so a rail that does run short
-   scrolls as one piece instead of letting the list ride under the module
-   below it. */
+
+   The rail itself never scrolls. Two bands inside it do: the ledger of what is
+   out, and the list of who could come in. Everything else — the search field,
+   the armband, the send button — stays where the viewer left it however many
+   transfers are open. A rail that scrolls as one piece hides whichever end the
+   viewer is not looking at, and on a wildcard that end was the list. */
+.board.pick .churn{overflow:hidden}
 .board.pick .mod.grow{overflow:hidden}
-.board.pick .plist{flex:1 1 auto; min-height:clamp(200px,36vh,540px)}
-.board.pick .send .modbody{padding:10px 14px 13px; gap:9px}
+.board.pick .searchhead, .board.pick .minirow{flex:0 0 auto}
+.board.pick .plist{flex:1 1 0; min-height:clamp(140px,22vh,420px)}
+.board.pick .searchhead{padding:9px 14px 6px}
+
+.board.pick .send .modbody{padding:9px 14px 12px; gap:8px}
 .board.pick .send .hint{font-size:12.5px}
+
+/* What is out, directly above the search that fills it: the ledger is the
+   question the list answers, not part of sending. */
+.outband{
+  flex:0 1 auto; min-height:0; overflow:auto; overflow-x:hidden;
+  padding:8px 10px 4px;
+}
+/* Three rows and the start of a fourth, then it scrolls inside itself, so a
+   wildcard's fifteen transfers cost the list the same strip of rail that one
+   does. The ledger is a shortcut between gaps rather than the record of them —
+   the pitch holds all fifteen players at full size in three quarters of the
+   screen, permanently, and the list below has no second copy anywhere. Landing
+   the cap on half a row is deliberate: the cut row is what says there are more. */
+.board.pick .outband{max-height:clamp(113px,16vh,200px)}
+.outband + .searchhead{padding-top:7px}
+/* Below the breakpoint the rail sits under the foot and the page scrolls, so
+   none of the rationing above applies: nothing is competing for a fixed height.
+   The bands go back to growing, and only the list keeps a scroll of its own. */
 @media (max-width:1000px){
   .board.app{height:auto; min-height:100dvh; overflow:visible}
   .board.app .frame{overflow:visible}
   .board.app .churn{max-height:none}
-  .board.pick .plist{max-height:64vh}
+  .board.pick .churn, .board.pick .mod.grow{overflow:visible}
+  .board.pick .plist{flex:1 1 auto; min-height:clamp(240px,42vh,540px); max-height:64vh}
+  .board.pick .outband{max-height:50vh; padding:10px 10px 6px}
 }
 
 /* The leaderboard's frame is a table, not a pitch. */
@@ -911,14 +1112,39 @@ html{scroll-behavior:smooth}
    often a good deal shorter than 1080 (a scaled desktop, a cropped OBS source), and a
    shirt sized on width alone pushes the forwards off the bottom edge. So the shirt is
    sized by whichever budget runs out first: 7.2vw, or the height the four rows have
-   left to share once the strip, the foot and the pitch's own padding are paid for. */
+   left to share.
+
+   That height is measured, not guessed. Counting the chrome by hand meant naming
+   every band that is not pitch — and the count missed two of them, the bench and
+   the host's own strip, so a hosted board handed the four rows less room than the
+   shirts needed and `space-evenly` spent the shortfall as negative gaps: rows
+   printed through one another and through the bench. So the frame and the pitch
+   are size containers and the shirt reads `cqh`: the bench is sized from the
+   frame's height, the pitch keeps whatever is left over — host strip, verdict
+   note and bench already deducted by the layout — and the rows divide that.
+   Only above the breakpoint: below it the board scrolls and the frame's height
+   is its content's, which a size container cannot be asked for. */
 .board.fixed .pitch{
-  --plate:42px;                 /* the name and vote share stacked under each shirt */
-  --chrome:148px;               /* strip + foot + this pitch's vertical padding */
-  --slot:clamp(64px, min(7.2vw, calc(((100dvh - var(--chrome)) / 4 - var(--plate)) * 1.03)), 138px);
+  --plate:38px;                 /* the name and vote share stacked under each shirt */
+  --gaps:40px;                  /* air between the four rows, so they never touch */
+  --slot:clamp(64px, 7.2vw, 138px);
   padding:12px clamp(10px,2vw,28px);
 }
 .board.fixed .bench{--slot:clamp(64px,7.2vw,138px)}
+@media (min-width:1001px){
+  .board.fixed .frame{container-type:size}
+  /* flex-basis 0, or the pitch's own content would decide the height it is
+     being measured for, and a size container may not ask its contents. The
+     1.03 turns a shirt's height budget back into the width it is drawn at. */
+  .board.fixed .pitch{
+    flex:1 1 0; container-type:size;
+    --slot:clamp(40px, min(7.2vw, calc(((100cqh - var(--gaps)) / 4 - var(--plate)) * 1.03)), 138px);
+  }
+  /* The bench is one row out of five and is read, not watched, so it takes the
+     smaller share — and its floor sits under the pitch's, or a squeezed board
+     would seat substitutes in bigger shirts than the eleven. */
+  .board.fixed .bench{--slot:clamp(36px, min(6.4vw, calc(100cqh * .14 - 36px)), 120px)}
+}
 /* The plate has to stay inside its share of the row for the budget above to hold. */
 .board.fixed .plate .nm{font-size:clamp(12px,.92vw,16px); line-height:1.28; padding:1px 4px}
 .board.fixed .plate .sub{font-size:clamp(12px,.82vw,15px); line-height:1.3; padding:0 4px}
@@ -941,3 +1167,82 @@ html{scroll-behavior:smooth}
   .foot{padding:10px 14px}
   .band h1{font-size:clamp(34px,9vw,54px)}
 }
+
+/* ==========================================================================
+   Transfer pools
+
+   The same frame and rail, asking a different question: the host's team is the
+   settled thing on the pitch, and what is still moving is which parts of it the
+   crowd wants changed.
+   ========================================================================== */
+
+/* Choosing what a pool asks. Two cards rather than a select, because it is the
+   one decision on the form that changes every screen that follows it. */
+.kindpick{display:grid; grid-template-columns:1fr 1fr; gap:9px}
+.kindcard{
+  display:flex; flex-direction:column; gap:5px; text-align:left; padding:12px;
+  border:1px solid var(--frame-line); border-radius:var(--r-sm);
+  background:rgba(255,255,255,.05); color:inherit; cursor:pointer;
+  transition:border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.kindcard:hover{background:rgba(255,255,255,.09)}
+.kindcard.on{border-color:var(--hot); background:rgba(229,24,95,.12)}
+.kindcard b{font-size:15px; font-weight:600}
+.kindcard span{font-size:13px; color:var(--frame-text-3); line-height:1.45}
+@media (max-width:620px){ .kindpick{grid-template-columns:1fr} }
+
+/* The transfers a viewer has settled on. Hairline rows, like every other list
+   in the rail — a bordered card per transfer reads as five objects stacked in
+   a column the list below it needs, and buys nothing the rule does not. */
+.swaplist{list-style:none; display:flex; flex-direction:column; padding:0; margin:0}
+.swaplist li{
+  display:flex; align-items:center; gap:8px; min-height:29px; padding:3px 4px 3px 10px;
+  font-size:14px; border-top:1px solid var(--frame-line);
+}
+.swaplist li:first-child{border-top:0}
+.swaplist .off{color:var(--frame-text-2); text-decoration:line-through}
+.swaplist .on{font-weight:600; flex:1; min-width:0; text-align:left}
+/* A transfer still waiting on a signing. The half-written line is the way back
+   to it: tapping it points the list at that gap again. */
+.swaplist button.on{
+  background:none; border:0; padding:0; font:inherit; color:var(--mint);
+  cursor:pointer; text-align:left;
+}
+.swaplist button.on:hover{text-decoration:underline}
+.swaplist .btn{margin-left:auto; padding:0 8px; line-height:1.6}
+/* The gap the list is currently filtered for. Mint marks the same gap the shirt
+   on the pitch is wearing, so both screens name it the same way; the inset rule
+   is the second cue, since the row is already coloured by its own state. */
+.swaplist li.aim{
+  background:rgba(255,255,255,.07);
+  box-shadow:inset 2px 0 0 var(--mint);
+  border-radius:0 var(--r-sm) var(--r-sm) 0;
+}
+.swaplist li.aim + li{border-top-color:transparent}
+.arrow{color:var(--frame-hot); font-weight:600}
+
+/* A swap in the rail is two names on one line, so the row gives up the club
+   mark to keep both of them readable at broadcast distance. */
+.rank.swap .nm{white-space:normal; line-height:1.25}
+.rank.swap .arrow{margin:0 2px}
+
+/* The host's squad list on the setup screen: no support bar to draw, so the
+   row loses the bar's height rather than showing an empty one. */
+.voterow.flat{padding-left:10px}
+.voterow.flat > .nm{padding-left:0}
+.voterow .nm .tag{
+  display:inline-block; margin-left:5px; padding:0 4px; border-radius:3px;
+  background:var(--frame-hot); color:var(--frame); font-size:11px; vertical-align:middle;
+}
+
+/* Getting back to the import screen from the picker, which draws its own board
+   and so has no room in its own strip for the way out. */
+.setupback{
+  display:flex; align-items:center; gap:11px; padding:8px clamp(10px,2vw,20px);
+  background:var(--frame-2); border-bottom:1px solid var(--frame-line);
+}
+.setupback .err{margin:0}
+
+/* The crowd's transfers can leave the host short. That is reported, never
+   fixed by dropping the player who won the vote. */
+.foot dd.over{color:var(--frame-hot)}

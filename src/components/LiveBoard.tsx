@@ -5,6 +5,8 @@ import Link from "next/link";
 import { PitchRows, type SlotView } from "./Pitch";
 import { TeamMark } from "./Kit";
 import { Countdown } from "./Countdown";
+import HostBar from "./HostBar";
+import { poolLock } from "@/lib/lock";
 import { getBrowserClient } from "@/lib/supabase";
 import { POS, POSITIONS, crowdXI, money, pctText, ranked, tally } from "@/lib/squad";
 import type { Bootstrap, Entry, Pool, Ranked, Team } from "@/lib/types";
@@ -47,13 +49,23 @@ export default function LiveBoard({
   pool,
   boot,
   initialEntries,
+  isHost = false,
 }: {
   pool: Pool;
   boot: Bootstrap;
   initialEntries: Row[];
+  /** Whether this browser opened the pool, and so gets the host's controls. */
+  isHost?: boolean;
 }) {
   const byId = useMemo(() => new Map(boot.players.map((p) => [p.id, p])), [boot.players]);
   const teams = useMemo(() => new Map(boot.teams.map((t) => [t.id, t])), [boot.teams]);
+
+  // The gameweek's own lock. A host may bring their pool forward of it, never
+  // past it, so it is the ceiling on the closing time they can set.
+  const gwDeadline = useMemo(
+    () => boot.events.find((e) => e.id === pool.gw)?.deadline ?? boot.deadline ?? null,
+    [boot.events, boot.deadline, pool.gw],
+  );
 
   const [entries, setEntries] = useState<Row[]>(initialEntries);
   const [copied, setCopied] = useState<"" | "done" | "manual">("");
@@ -62,21 +74,29 @@ export default function LiveBoard({
   // Off until the browser says so: the server does not know the viewer's clock,
   // and a link that appeared mid-render would not match the markup sent down.
   const [locked, setLocked] = useState(false);
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     setLink(`${window.location.origin}/p/${pool.id}`);
   }, [pool.id]);
 
-  const deadline = pool.deadline;
+  // The host can move either of these from the bar below without a reload, so
+  // they are state rather than the props they started as.
+  const [deadline, setDeadline] = useState(pool.deadline);
+  const [closedAt, setClosedAt] = useState(pool.closed_at);
+
+  // Two different questions now that a host can close early: whether the pool is
+  // still taking teams, and whether there is a gameweek to score. Closing the
+  // pool at half seven does not make the fixtures kick off any sooner.
+  const [started, setStarted] = useState(false);
   useEffect(() => {
-    if (!deadline) return;
-    const check = () => setLocked(new Date(deadline).getTime() <= Date.now());
+    const check = () => {
+      setLocked(poolLock({ deadline, closed_at: closedAt }).locked);
+      setStarted(poolLock({ deadline: gwDeadline, closed_at: null }).locked);
+    };
     check();
     const t = setInterval(check, 30000);
     return () => clearInterval(t);
-  }, [deadline]);
+  }, [deadline, closedAt, gwDeadline]);
 
   useEffect(() => {
     let stopped = false;
@@ -252,7 +272,7 @@ export default function LiveBoard({
   }
 
   return (
-    <div className="board fixed">
+    <div className={`board fixed${isHost ? " hosted" : ""}`}>
       <header className="strip">
         <Link className="brand" href="/">
           <span className="dot" />
@@ -262,15 +282,25 @@ export default function LiveBoard({
         <span className="chip live">Live</span>
         <span className="chip name">{pool.name}</span>
         <span className="spacer" />
-        {pool.deadline && <Countdown deadline={pool.deadline} />}
+        {deadline && <Countdown deadline={deadline} closed={Boolean(closedAt)} />}
         <span className="sep" />
         <span className="meter">
           <span className="lab">Teams in</span>
           <b className="num">{t.n}</b>
         </span>
-        {locked && <Link className="btn btn-sm" href={`/p/${pool.id}/scores`}>Scores</Link>}
+        {started && <Link className="btn btn-sm" href={`/p/${pool.id}/scores`}>Scores</Link>}
         <Link className="btn btn-sm" href={`/p/${pool.id}`}>My team</Link>
       </header>
+
+      {isHost && (
+        <HostBar
+          poolId={pool.id}
+          deadline={deadline}
+          closedAt={closedAt}
+          fplDeadline={gwDeadline}
+          onChange={(next) => { setDeadline(next.deadline); setClosedAt(next.closed_at); }}
+        />
+      )}
 
       <main className="frame">
         {t.n ? (
@@ -415,6 +445,12 @@ export default function LiveBoard({
                 </button>
               </div>
             </div>
+            {locked && (
+              <p className="hint">
+                Voting is closed. The link still works — it shows a viewer the teams,
+                locked.
+              </p>
+            )}
             {/* The standing explainer is gone from the rail, but the copy
                 failure still has to reach the host — it is the one thing here
                 they must act on. */}
@@ -467,17 +503,6 @@ function RankRow({
   );
 }
 
-/** How long ago a team landed, in the shortest form that still reads. */
-function ago(iso?: string): string {
-  if (!iso) return "";
-  const secs = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
-  if (secs < 60) return "just now";
-  const mins = Math.round(secs / 60);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.round(hrs / 24)}d ago`;
-}
 
 /** The pre-clipboard-API copy. Deprecated, but it works on a plain-http origin. */
 function execCopy(text: string): boolean {

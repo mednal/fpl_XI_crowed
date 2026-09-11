@@ -219,6 +219,13 @@ carries `.grow` and takes the leftover height with its own scroll; a module anch
 `margin-top: auto` sits at the rail's foot and holds the primary action. Anything a host
 must be able to read without scrolling belongs above the `.grow` module, never inside it.
 
+**The rail never scrolls as a piece.** Scrolling belongs to bands inside it, each capped
+so its content cannot spend another band's height: the transfer picker's `.outband` (the
+ledger of who is out) is held to three rows and a half, and `.plist` (who could come in)
+takes what is left. A rail that scrolls whole hides whichever end the viewer is not
+looking at, and the end it hides is the one they were working in. Whatever a viewer must
+reach at any moment — a search field, the send button — sits outside every scroller.
+
 ## Elevation & Depth
 
 Depth comes from **shadows with an offset and a real blur**, never from a colour halo:
@@ -286,6 +293,24 @@ number the host reads aloud.
 **Chip** — uppercase Barlow Condensed in a pill. `.live` adds a pulsing dot and takes the
 `hot` fill; `.name` is the one chip allowed to truncate and then disappear when the strip
 runs out of room.
+
+**Deadline dial** — the host's closing time, as a strip meter that opens a panel. The
+panel holds a *runway*: a track spanning now to the gameweek deadline, a playhead on it,
+day names marking the midnights it crosses, and four presets worded as distances from the
+deadline. It replaces `input[type=datetime-local]`, whose month grid is the wrong
+instrument twice over — it offers thirty days of which twenty-nine are illegal, and its
+popup is the one surface here the palette cannot reach.
+
+The track is deliberately **not linear**. Drawn to scale, a deadline three days out puts
+every adjustment a host makes — minutes and hours, never days — inside the last two per
+cent of it, so distance is measured back from the deadline on a curve whose bend follows
+the length of the runway: a three-hour runway comes out nearly straight, a week-long one
+leans on its final hours, and "an hour before" lands in the same place either way. The day
+marks are placed by the same transform and bunch to the left, which is what shows the
+reader the scale is not uniform. The fill is `frame-hot` (the pool is open), the far stop
+`frame-gold` (the gameweek's own lock). Two placements: `inline` grows the form it sits
+in and takes a hairline; `overlay` floats on a shadow, because the broadcast board holds
+`100dvh` and nothing may push the eleven.
 
 **Browser surfaces are part of the system.** Selection (`hot` on white), the caret
 (`hot`), focus rings, and scrollbars are themed from the palette, and scrollbars inside

@@ -59,6 +59,10 @@ export async function buildScoreboard(poolId: string): Promise<ScoresResult> {
   if (poolErr) return { kind: "error", status: 500, error: poolErr.message };
   if (!pool) return { kind: "error", status: 404, error: "That pool does not exist." };
 
+  // A pool never closes later than its gameweek does, so a closing time still
+  // ahead of us settles it without an FPL call. The real test comes below: a
+  // host who closed early — or set their own deadline — has a shut pool hours
+  // before there is anything to score.
   if (pool.deadline && new Date(pool.deadline).getTime() > Date.now()) {
     return { kind: "pending", reason: "The gameweek has not started yet." };
   }
@@ -73,6 +77,7 @@ export async function buildScoreboard(poolId: string): Promise<ScoresResult> {
   let players: Player[];
   let gwName: string;
   let settled: boolean;
+  let kickoff: string | null;
   try {
     const [live, boot] = await Promise.all([getLiveStats(pool.gw), getBootstrap()]);
     stats = live;
@@ -80,12 +85,20 @@ export async function buildScoreboard(poolId: string): Promise<ScoresResult> {
     const event = boot.events.find((e) => e.id === pool.gw);
     gwName = event?.name ?? `Gameweek ${pool.gw}`;
     settled = event?.finished ?? false;
+    kickoff = event?.deadline ?? null;
   } catch {
     return {
       kind: "error",
       status: 503,
       error: "The FPL API is not responding, so scores could not be read. Try again shortly.",
     };
+  }
+
+  // Whether there is a score to show is the *gameweek's* business, not the
+  // pool's: a host who closes their pool at half seven has not made the fixtures
+  // kick off any earlier.
+  if (kickoff && new Date(kickoff).getTime() > Date.now()) {
+    return { kind: "pending", reason: "The gameweek has not started yet." };
   }
 
   const byId = new Map(players.map((p) => [p.id, p]));

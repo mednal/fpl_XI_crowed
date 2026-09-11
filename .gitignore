@@ -5,3 +5,8 @@ node_modules
 next-env.d.ts
 *.tsbuildinfo
 boot.json
+
+# tooling scratch, not source
+.impeccable
+*.stackdump
+.*.tmp.mjs

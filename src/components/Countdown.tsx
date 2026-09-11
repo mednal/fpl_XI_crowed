@@ -13,8 +13,10 @@ function label(msLeft: number): string {
   return `${m}m`;
 }
 
-/** Time left until the real FPL deadline, which is when voting closes. */
-export function Countdown({ deadline }: { deadline: string }) {
+/** Time left until the pool closes on its own — the FPL deadline, or the earlier
+ *  one the host set. A host who shuts the pool by hand ends it before that, so
+ *  the clock gives way to the fact. */
+export function Countdown({ deadline, closed = false }: { deadline: string; closed?: boolean }) {
   const target = new Date(deadline).getTime();
   const [left, setLeft] = useState<number | null>(null);
 
@@ -24,6 +26,8 @@ export function Countdown({ deadline }: { deadline: string }) {
     const t = setInterval(tick, 30000);
     return () => clearInterval(t);
   }, [target]);
+
+  if (closed) return <span className="chip warn">Closed by the host</span>;
 
   // Rendered empty on the server so the markup matches until the clock starts.
   if (left === null) return <span className="chip">Deadline</span>;
