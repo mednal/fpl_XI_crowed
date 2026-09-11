@@ -26,7 +26,7 @@ import type { HostSquad, Player, PosId, Ranked, TransferInput, TransferRow } fro
 /** How many transfers a viewer may make when the host has not said. */
 export const DEFAULT_MOVES = 1;
 /** What a host may choose. 0 is unlimited, which in practice is the 15 they own. */
-export const MOVE_CHOICES = [1, 2, 3, 0];
+export const MOVE_CHOICES = [1, 2, 3, 4, 5, 0];
 /** Unlimited still cannot exceed the squad. */
 export const MAX_MOVES = 15;
 
@@ -418,6 +418,26 @@ export type CrowdTransfers = {
  * for. The bank and the club counts come back alongside instead, for the board
  * to point at.
  */
+/**
+ * Who wears the armband once a set of transfers has gone through. The vote
+ * wins when there is one, skipping anyone those transfers have just sold, and
+ * otherwise the armband stays with the host — unless the transfers sold him,
+ * which is the one case where the board would draw a C on an empty shirt. Null
+ * means there is no captain and the board says so rather than inventing one.
+ *
+ * Shared by the crowd's own result and by the host trying a set of transfers on
+ * the board, so the two can never disagree about where the armband ends up.
+ */
+export function crowdCaptain(
+  sq: HostSquad,
+  outIds: number[],
+  ranked: Ranked[],
+): number | null {
+  const voted = ranked.find((r) => !outIds.includes(r.id));
+  if (voted) return voted.id;
+  return outIds.includes(sq.captain) ? null : sq.captain;
+}
+
 export function crowdTransfers(
   rows: Pick<TransferRow, "out_ids" | "in_ids" | "captain">[],
   sq: HostSquad,
@@ -442,14 +462,7 @@ export function crowdTransfers(
   const outIds = applied.map((s) => s.out.id);
   const inIds = applied.map((s) => s.in.id);
 
-  // The armband follows the vote when there is one, and otherwise stays with
-  // the host — unless the crowd has just sold him, which is the one case where
-  // the board would otherwise draw a C on an empty shirt.
-  const soldCaptain = outIds.includes(sq.captain);
-  const voted = captain.find((r) => !outIds.includes(r.id));
-  const newCaptain = voted?.id ?? (soldCaptain ? null : sq.captain);
-
-  const squad = applyTransfers(sq, outIds, inIds, newCaptain);
+  const squad = applyTransfers(sq, outIds, inIds, crowdCaptain(sq, outIds, captain));
   const bank = fundsLeft(sq, outIds, inIds, byId);
   const stacked = Object.entries(clubCounts(hostIds(squad), byId))
     .map(([team, n]) => [Number(team), n] as [number, number])

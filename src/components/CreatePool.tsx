@@ -147,10 +147,7 @@ export default function CreatePool({
               endLabel={`${gwName} deadline`}
               onChange={setCloses}
             />
-            <p className="hint">
-              Drag the runway to close earlier than the official deadline. You can move
-              it again, or close the pool by hand, from the results screen.
-            </p>
+           
           </div>
 
           <label className="switch">
@@ -179,14 +176,7 @@ export default function CreatePool({
         </div>
       </section>
 
-      <section className="mod" style={{ marginTop: "auto", borderBottom: 0 }}>
-        <div className="modbody">
-          <p className="hint">
-            No account for you, none for your viewers. A pool covers one gameweek and never runs
-            past the official FPL deadline — but it is yours to close whenever you like.
-          </p>
-        </div>
-      </section>
+     
     </>
   );
 }

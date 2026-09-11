@@ -5,11 +5,15 @@ import Link from "next/link";
 import SquadPitch from "./SquadPitch";
 import { TeamMark } from "./Kit";
 import { Countdown } from "./Countdown";
-import HostBar from "./HostBar";
+import HostBar, { ViewerPreview } from "./HostBar";
 import { poolLock } from "@/lib/lock";
 import { getBrowserClient } from "@/lib/supabase";
-import { money, pctText } from "@/lib/squad";
-import { DEFAULT_MOVES, crowdTransfers, movesAllowed, squadValue } from "@/lib/transfers";
+import { MAXCLUB, money, pctText } from "@/lib/squad";
+import {
+  DEFAULT_MOVES, applyTransfers, clubCounts, crowdCaptain, crowdTransfers,
+  fundsLeft, hostIds, movesAllowed, squadValue,
+} from "@/lib/transfers";
+import type { SwapRank } from "@/lib/transfers";
 import type { Bootstrap, HostSquad, Pool, Ranked, Team, TransferRow } from "@/lib/types";
 
 type Row = Pick<TransferRow, "id" | "nick" | "out_ids" | "in_ids" | "captain" | "updated_at">;
@@ -23,6 +27,10 @@ const CROSS_MS = 1400;
 /** How deep each rail list goes before it stops being a vote and starts being
  *  noise — the same judgement `ALSO_PER_POS` makes on the XI board. */
 const LIST_ROWS = 6;
+
+/** How far down the crowd's proposals the host can reach. Past this they are
+ *  single votes, and a switch for one is a switch nobody asked for. */
+const TRY_ROWS = 8;
 
 export default function TransferBoard({
   pool,
@@ -52,6 +60,17 @@ export default function TransferBoard({
   // maths reads it from here rather than from the row this page was drawn with.
   const [moves, setMoves] = useState(pool.moves ?? DEFAULT_MOVES);
   const [locked, setLocked] = useState(false);
+  // Which of the crowd's transfers the host is trying on the pitch. The team on
+  // the board is the host's own — the crowd voting for a transfer does not make
+  // it, and a board that quietly made it would be showing a team the host never
+  // picked. Trying one is this browser's state and nothing else: nothing is
+  // written to the pool, and no viewer's screen moves.
+  const [tried, setTried] = useState<string[]>([]);
+  const [deckOpen, setDeckOpen] = useState(false);
+  // The host checking what the crowd's screen looks like. Nothing about the pool
+  // changes — this browser is still the host and the server still knows it — so
+  // it is state and not a round trip.
+  const [preview, setPreview] = useState(false);
   const [copied, setCopied] = useState<"" | "done" | "manual">("");
   const [link, setLink] = useState("");
   const linkRef = useRef<HTMLElement | null>(null);
@@ -124,11 +143,59 @@ export default function TransferBoard({
     [rows, squad, byId, moves],
   );
   const cap = movesAllowed(moves);
-  const value = squadValue(cx.squad, byId);
+
+  // A transfer the crowd has stopped proposing cannot stay on the pitch: the
+  // votes behind it went somewhere else while the board was up.
+  const proposed = useMemo(() => new Set(cx.swaps.map((s) => s.key)), [cx.swaps]);
+  useEffect(() => {
+    setTried((prev) => (prev.every((k) => proposed.has(k)) ? prev : prev.filter((k) => proposed.has(k))));
+  }, [proposed]);
+
+  /** The transfers being tried, in the order the host turned them on. Two that
+   *  need the same player cannot both be on — nobody is sold or signed twice,
+   *  which is `crowdTransfers`' own rule, applied to a hand-picked set. */
+  const trial = useMemo(() => {
+    // A viewer's board never shows a trial, so the preview must not either.
+    if (preview) return [];
+    const byKey = new Map(cx.swaps.map((s) => [s.key, s]));
+    const picked: SwapRank[] = [];
+    const used = new Set<number>();
+    for (const key of tried) {
+      const s = byKey.get(key);
+      if (!s || used.has(s.out.id) || used.has(s.in.id)) continue;
+      used.add(s.out.id);
+      used.add(s.in.id);
+      picked.push(s);
+    }
+    return picked;
+  }, [tried, cx.swaps, preview]);
+
+  const outIds = useMemo(() => trial.map((s) => s.out.id), [trial]);
+  const inIds = useMemo(() => trial.map((s) => s.in.id), [trial]);
+
+  // What is actually on the pitch: the host's fifteen, plus whatever they are
+  // trying. Every number in the foot is read off this and not off the crowd's
+  // result, so the shirts and the figures under them are the same team.
+  const shown = useMemo(
+    () => (trial.length
+      ? applyTransfers(squad, outIds, inIds, crowdCaptain(squad, outIds, cx.captain))
+      : squad),
+    [squad, trial.length, outIds, inIds, cx.captain],
+  );
+  const bank = trial.length ? fundsLeft(squad, outIds, inIds, byId) : squad.bank ?? 0;
+  const value = squadValue(shown, byId);
+  const stacked = useMemo(
+    () => Object.entries(clubCounts(hostIds(shown), byId))
+      .map(([team, n]) => [Number(team), n] as [number, number])
+      .filter(([, n]) => n > MAXCLUB)
+      .sort((a, b) => b[1] - a[1]),
+    [shown, byId],
+  );
 
   // A signing crossing into the team is the moment worth watching, exactly as a
-  // shirt arriving on the XI board is.
-  const inNow = cx.applied.map((s) => s.in.id).join(",");
+  // shirt arriving on the XI board is — and now it happens when the host tries
+  // one, which is the only thing that moves a shirt on this board.
+  const inNow = inIds.join(",");
   const prevIn = useRef<Set<number> | null>(null);
   const [crossed, setCrossed] = useState<Set<number>>(new Set());
   useEffect(() => {
@@ -143,7 +210,16 @@ export default function TransferBoard({
     return () => clearTimeout(t);
   }, [inNow]);
 
-  const incoming = new Map(cx.applied.map((s) => [s.in.id, s]));
+  const incoming = new Map(trial.map((s) => [s.in.id, s]));
+
+  /** A transfer that needs a player one already being tried has taken. */
+  const taken = new Set(trial.flatMap((s) => [s.out.id, s.in.id]));
+  const clashes = (s: SwapRank) =>
+    !tried.includes(s.key) && (taken.has(s.out.id) || taken.has(s.in.id));
+
+  function toggleTry(key: string) {
+    setTried((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+  }
 
   const decorate = (id: number) => {
     const swap = incoming.get(id);
@@ -174,11 +250,15 @@ export default function TransferBoard({
     flash("manual");
   }
 
-  const captainNow = byId.get(cx.squad.captain);
+  const captainNow = byId.get(shown.captain);
   const capVote = cx.captain[0];
 
+  // What this browser may do, and what it is currently being shown. The first is
+  // the pool's answer; the second is the host's own choice of screen.
+  const hostView = isHost && !preview;
+
   return (
-    <div className={`board fixed${isHost ? " hosted" : ""}`}>
+    <div className={`board fixed${hostView ? " hosted" : ""}`}>
       <header className="strip">
         <Link className="brand" href="/">
           <span className="dot" />
@@ -197,7 +277,7 @@ export default function TransferBoard({
         <Link className="btn btn-sm" href={`/p/${pool.id}`}>Vote</Link>
       </header>
 
-      {isHost && (
+      {hostView && (
         <HostBar
           poolId={pool.id}
           deadline={deadline}
@@ -209,11 +289,14 @@ export default function TransferBoard({
             setClosedAt(next.closed_at);
             if (next.moves != null) setMoves(next.moves);
           }}
+          onPreview={() => setPreview(true)}
         />
       )}
 
+      {isHost && preview && <ViewerPreview onExit={() => setPreview(false)} />}
+
       <main className="frame">
-        {cx.applied.length === 0 && (
+        {cx.swaps.length === 0 && (
           <p className="locked-note">
             {cx.n === 0
               ? "No votes yet. Share the link and the transfers appear here as they arrive."
@@ -222,8 +305,22 @@ export default function TransferBoard({
                 : "No transfer has a vote behind it yet."}
           </p>
         )}
+        {hostView && cx.swaps.length > 0 && (
+          <TryDeck
+            swaps={cx.swaps}
+            tried={tried}
+            trial={trial}
+            cap={cap}
+            open={deckOpen}
+            clashes={clashes}
+            onOpen={() => setDeckOpen((o) => !o)}
+            onToggle={toggleTry}
+            onVerdict={() => setTried(cx.applied.map((s) => s.key))}
+            onClear={() => setTried([])}
+          />
+        )}
         <SquadPitch
-          squad={cx.squad}
+          squad={shown}
           byId={byId}
           teams={teams}
           decorate={decorate}
@@ -259,17 +356,24 @@ export default function TransferBoard({
         <span className="sep" />
         <dl>
           <dt className="lab">Bank</dt>
-          <dd className={`sm num${cx.bank < 0 ? " over" : ""}`}>{money(cx.bank)}</dd>
+          <dd className={`sm num${bank < 0 ? " over" : ""}`}>{money(bank)}</dd>
         </dl>
         <span className="spacer" />
-        {cx.bank < 0 && (
-          <span className="chip warn" title="The crowd's choice, priced up. Nobody was dropped to make it fit.">
-            {money(-cx.bank)} short
+        {/* Which team the shirts are: the host's, or the host's with something
+            tried on it. A board on camera never leaves that to be guessed. */}
+        {trial.length > 0 && (
+          <span className="chip try">
+            Trying {trial.length === 1 ? "one transfer" : `${trial.length} transfers`}
           </span>
         )}
-        {cx.stacked.length > 0 && (
+        {bank < 0 && (
+          <span className="chip warn" title="Priced at today's prices. Nobody was dropped to make it fit.">
+            {money(-bank)} short
+          </span>
+        )}
+        {stacked.length > 0 && (
           <span className="chip warn">
-            {cx.stacked.map(([id, n]) => `${n} ${teams.get(id)?.sh ?? "?"}`).join(" · ")}
+            {stacked.map(([id, n]) => `${n} ${teams.get(id)?.sh ?? "?"}`).join(" · ")}
           </span>
         )}
       </div>
@@ -300,9 +404,9 @@ export default function TransferBoard({
           {cx.swaps.length ? (
             cx.swaps.slice(0, LIST_ROWS).map((s, i) => (
               <div
-                className={`rank swap${i < cap ? " in" : ""}${crossed.has(s.in.id) ? " crossing" : ""}`}
+                className={`rank swap${i < cap ? " in" : ""}${tried.includes(s.key) ? " tried" : ""}${crossed.has(s.in.id) ? " crossing" : ""}`}
                 key={s.key}
-                title={`${s.count} of ${cx.n} viewers`}
+                title={`${s.count} of ${cx.n} viewers${tried.includes(s.key) ? " · on the pitch" : ""}`}
               >
                 <div className="top">
                   <span className="pos">{i + 1}</span>
@@ -396,6 +500,95 @@ export default function TransferBoard({
           </div>
         </section>
       </aside>
+    </div>
+  );
+}
+
+/**
+ * The host's way of seeing an idea without taking it. The crowd's proposed
+ * transfers, each one a switch that puts it on the pitch and takes it off
+ * again — the board's team stays the host's own until they say otherwise, and
+ * even then only on this screen.
+ *
+ * It floats at the frame's left edge and starts shut, because the frame holds
+ * 100dvh and nothing may push the eleven. The same reason the deadline dial
+ * floats rather than growing the strip it sits in.
+ */
+function TryDeck({
+  swaps,
+  tried,
+  trial,
+  cap,
+  open,
+  clashes,
+  onOpen,
+  onToggle,
+  onVerdict,
+  onClear,
+}: {
+  swaps: SwapRank[];
+  tried: string[];
+  trial: SwapRank[];
+  cap: number;
+  open: boolean;
+  clashes: (s: SwapRank) => boolean;
+  onOpen: () => void;
+  onToggle: (key: string) => void;
+  onVerdict: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className={`trydeck${open ? " open" : ""}`}>
+      <button className="trytrig" onClick={onOpen} aria-expanded={open}>
+        <span className="lab">On the pitch</span>
+        <b className="num">{trial.length}</b>
+        <span className="of">of {swaps.length}</span>
+        <svg className="dialcaret" viewBox="0 0 12 12" aria-hidden="true">
+          <path d="M2.5 4.5 6 8 9.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="trypanel">
+          <p className="dialsay">
+            The team on the board is yours. Put a transfer on the pitch to see it — nothing is
+            saved, and nobody&apos;s vote moves.
+          </p>
+          <ul className="trylist">
+            {swaps.slice(0, TRY_ROWS).map((s, i) => {
+              const on = tried.includes(s.key);
+              const blocked = clashes(s);
+              return (
+                <li key={s.key}>
+                  <button
+                    className={`tryrow${on ? " on" : ""}`}
+                    disabled={blocked}
+                    aria-pressed={on}
+                    onClick={() => onToggle(s.key)}
+                    title={blocked
+                      ? "Another transfer on the pitch already needs one of these two."
+                      : on ? "Take it back off the pitch" : "Put it on the pitch"}
+                  >
+                    <span className="pos">{i + 1}</span>
+                    <span className="nm">
+                      {s.out.n} <span className="arrow">→</span> {s.in.n}
+                    </span>
+                    <span className="pc num">{pctText(s.pct)}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="tryfoot">
+            <button className="btn btn-sm" onClick={onVerdict}>
+              {cap === 1 ? "Try the crowd's pick" : `Try the crowd's top ${cap}`}
+            </button>
+            <button className="btn btn-sm btn-ghost" onClick={onClear} disabled={trial.length === 0}>
+              Back to my team
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

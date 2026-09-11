@@ -21,6 +21,7 @@ export default function HostBar({
   fplDeadline,
   moves,
   onChange,
+  onPreview,
 }: {
   poolId: string;
   deadline: string | null;
@@ -34,6 +35,8 @@ export default function HostBar({
     closed_at: string | null;
     moves?: number | null;
   }) => void;
+  /** Drop the host's own furniture and show the board the crowd gets. */
+  onPreview?: () => void;
 }) {
   // What the dial is showing. Null is "at the deadline", which is what the server
   // reads an empty closing time as.
@@ -154,6 +157,12 @@ export default function HostBar({
 
       <span className="spacer" />
 
+      {onPreview && (
+        <button className="btn btn-sm btn-ghost" onClick={onPreview}>
+          Preview as viewer
+        </button>
+      )}
+
       {(busy === "time" || busy === "moves") && <span className="chip">Saving…</span>}
       {note && <span className="chip good">{note}</span>}
       {error && <span className="err">{error}</span>}
@@ -171,6 +180,21 @@ export default function HostBar({
           {busy === "close" ? "Closing…" : confirming ? "Press again to close" : "Close voting now"}
         </button>
       ))}
+    </div>
+  );
+}
+
+/**
+ * The way back out of the viewer preview. It floats rather than taking a band of
+ * its own, because the whole point of the preview is that the board underneath
+ * is laid out exactly as the crowd's is — a strip here would move the pitch and
+ * the host would be checking the wrong screen.
+ */
+export function ViewerPreview({ onExit }: { onExit: () => void }) {
+  return (
+    <div className="vpreview">
+      <span>This is the board your viewers get. None of your controls are on it.</span>
+      <button className="btn btn-sm" onClick={onExit}>Back to host controls</button>
     </div>
   );
 }

@@ -141,6 +141,9 @@ input::placeholder{color:var(--text-3)}
 .chip.live::before{content:""; width:7px; height:7px; border-radius:50%; background:#fff; animation:pulse 1.8s var(--ease) infinite}
 .chip.warn, .strip .chip.warn{background:var(--gold-soft); color:var(--gold); border-color:transparent}
 .chip.good, .strip .chip.good{background:var(--mint-soft); color:var(--mint); border-color:transparent}
+/* The board is showing something the host is trying, not the team they own.
+   Gold: attention, no alarm — nothing is wrong, it just is not final. */
+.chip.try, .foot .chip.try{background:transparent; color:var(--frame-gold); border-color:var(--frame-gold)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
 
 /* A chip the host can turn. It reads as the chips beside it until you reach
@@ -659,6 +662,21 @@ img.kit{object-fit:contain}
    so the panel has to float clear of it rather than push the eleven down. */
 .hostbar{position:relative; z-index:20}
 
+/* The viewer preview's way back. Floating, and deliberately the one loud thing
+   on an otherwise ordinary viewer's board: the host is in a mode, and a mode
+   nobody can see they are in is how a stream ends up on the wrong screen. */
+.vpreview{
+  position:fixed; left:50%; bottom:14px; transform:translateX(-50%); z-index:60;
+  display:flex; align-items:center; gap:12px; max-width:calc(100vw - 28px);
+  padding:8px 10px 8px 14px; border-radius:999px;
+  background:var(--hot); color:#fff; font-size:13.5px; font-weight:600;
+  box-shadow:0 6px 22px rgb(0 0 0 / .28);
+}
+.vpreview span{min-width:0}
+@media (max-width:900px){
+  .vpreview{font-size:12.5px; gap:8px; padding:7px 8px 7px 12px}
+}
+
 /* ==========================================================================
    The closing-time dial
 
@@ -711,6 +729,63 @@ img.kit{object-fit:contain}
 .dial-inline .dialpanel{margin-top:8px; border:1px solid var(--frame-line)}
 @keyframes dialin{from{opacity:0; transform:translateY(-5px)} to{opacity:1; transform:none}}
 
+/* ==========================================================================
+   The host's try deck — the crowd's transfers, on and off the pitch
+   ========================================================================== */
+
+/* Floating at the frame's left edge, shut until asked for. The board holds
+   100dvh and the eleven may not be pushed, so this is the dial's arrangement
+   rather than another band across the top. */
+.trydeck{position:absolute; z-index:50; top:10px; left:12px; max-width:calc(100% - 24px)}
+.trytrig{
+  display:flex; align-items:center; gap:8px; padding:5px 10px;
+  background:rgba(20,16,32,.82); border:1px solid var(--frame-line); border-radius:var(--r-md);
+  color:var(--frame-text); cursor:pointer;
+  font-family:"Barlow Condensed",sans-serif; font-size:15px; font-weight:600; letter-spacing:.06em;
+  transition:border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+.trytrig:hover{background:rgba(20,16,32,.95); border-color:var(--frame-text-3)}
+.trydeck.open .trytrig{border-color:var(--frame-text-3)}
+.trytrig .lab{text-transform:uppercase; letter-spacing:.16em; font-size:12px; color:var(--frame-text-3)}
+.trytrig .num{font-family:"Anton",sans-serif; font-size:19px; font-variant-numeric:tabular-nums; letter-spacing:.01em}
+.trytrig .of{font-size:13px; color:var(--frame-text-3)}
+.trydeck.open .dialcaret{transform:rotate(180deg)}
+
+.trypanel{
+  position:absolute; top:calc(100% + 7px); left:0; width:min(330px,calc(100vw - 28px));
+  display:flex; flex-direction:column; gap:10px; padding:12px 12px 12px;
+  background:var(--frame); color:var(--frame-text); border-radius:var(--r-md);
+  box-shadow:0 14px 38px -12px rgba(0,0,0,.78);
+  animation:dialin var(--dur-fast) var(--ease) both;
+}
+.trylist{list-style:none; margin:0; padding:0; display:flex; flex-direction:column}
+.tryrow{
+  display:flex; align-items:baseline; gap:9px; width:100%; padding:7px 8px;
+  border:0; border-top:1px solid var(--frame-line); border-radius:var(--r-sm);
+  background:none; color:inherit; text-align:left; cursor:pointer;
+  transition:background var(--dur-fast) var(--ease);
+}
+.trylist li:first-child .tryrow{border-top:0}
+.tryrow:hover:not(:disabled){background:rgba(255,255,255,.07)}
+.tryrow:disabled{opacity:.34; cursor:not-allowed}
+.tryrow .pos{width:15px; flex:0 0 auto; font-family:"Anton",sans-serif; font-size:13px; color:var(--frame-text-3)}
+.tryrow .nm{flex:1; min-width:0; font-size:14.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.tryrow .pc{flex:0 0 auto; font-family:"Anton",sans-serif; font-size:16px; font-variant-numeric:tabular-nums}
+/* On the pitch. Mint is what has settled, and the inset rule is the second cue
+   — a row of names cannot be told apart by colour alone at broadcast distance. */
+.tryrow.on{background:rgba(255,255,255,.07); box-shadow:inset 2px 0 0 var(--mint)}
+.tryrow.on .pc{color:var(--mint)}
+.tryfoot{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+.tryfoot .btn{flex:0 1 auto}
+/* The same row in the rail, so the list the host is reading and the switch they
+   just pressed agree about what is on the pitch. */
+.rank.swap.tried{box-shadow:inset 2px 0 0 var(--mint)}
+
+@media (max-width:1000px){
+  .trydeck{position:static; max-width:none; padding:10px 12px 0}
+  .trypanel{position:static; width:auto; box-shadow:none; border:1px solid var(--frame-line); margin-top:8px}
+}
+
 .dialsay{color:var(--frame-text-2); font-size:13.5px; line-height:1.45}
 
 /* The track is 40px of grab area around a 6px rail — a host reaching for this
@@ -727,12 +802,6 @@ img.kit{object-fit:contain}
 .dialtrack.dragging .dialfill{transition:none}
 /* Midnight. Worth a mark only on a runway long enough to cross one. */
 .dialtick{position:absolute; top:-4px; bottom:-4px; width:1px; background:var(--frame-text-3); opacity:.6}
-/* Scale marks, so they sit under the rail's readings rather than beside them. */
-.dialday{
-  position:absolute; top:calc(50% + 8px); transform:translateX(-50%);
-  font-size:10.5px; letter-spacing:.14em; color:var(--frame-text-3); opacity:.8;
-  white-space:nowrap;
-}
 /* The gameweek's own lock, which is as far right as the handle can go. */
 .dialstop{position:absolute; right:-1px; top:-5px; bottom:-5px; width:3px; background:var(--frame-gold); border-radius:1px}
 
@@ -745,15 +814,139 @@ img.kit{object-fit:contain}
 /* The grab area is wider than the playhead it draws. */
 .dialhandle::before{content:""; position:absolute; inset:-9px -15px}
 
-.dialends{display:flex; align-items:baseline; gap:9px; margin-top:2px}
-.dialends .lab{color:var(--frame-text-3)}
-.dialends .lab.stop{color:var(--frame-gold)}
-.dialends .spacer{flex:1}
+/* Hosts hold the question two ways round — how long before, and at what time —
+   so the tab is the question and only the instrument answering it is on screen.
+   Selected is the frame's own ink inverted, the same as a chosen chip. */
+.dialtabs{
+  display:grid; grid-template-columns:1fr 1fr; gap:4px; padding:3px;
+  background:rgba(255,255,255,.05); border-radius:var(--r-sm);
+}
+.dialtab{
+  border:0; background:transparent; border-radius:5px; padding:7px 8px; cursor:pointer;
+  font-family:"Barlow Condensed",sans-serif; font-size:12.5px; font-weight:600;
+  letter-spacing:.1em; text-transform:uppercase; color:var(--frame-text-3);
+  transition:background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.dialtab:hover{color:var(--frame-text)}
+.dialtab.on{background:var(--frame-text); color:var(--frame)}
+.dialtabbody{display:flex; flex-direction:column; gap:12px}
 
-.dialsets{display:grid; grid-template-columns:repeat(auto-fit,minmax(118px,1fr)); gap:6px}
-.dialsets .pchip{padding:6px 11px; white-space:nowrap}
-.dialsets .pchip:disabled{opacity:.4; cursor:not-allowed}
-.dialsets .pchip:disabled:hover{background:rgba(255,255,255,.04); color:var(--frame-text-2)}
+/* The timer, when the host is holding the question as a length: the same
+   columns as the clock, counting how long before the deadline voting stops.
+   A runway under a day has no days column, so the grid follows the markup. */
+.dialtimer{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px}
+.dialtimer.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+
+/* The timer's own tab. The answer is a length, so the length is the largest
+   thing in the panel and the columns under it are only how it is changed. The
+   gameweek's lock is not the scale here and not the zero: it greys the rows
+   past it, and says so once, at the bottom. */
+.dialread{text-align:center; padding:2px 0 0}
+.dialfig{
+  display:block; font-family:"Anton",sans-serif; font-weight:400; font-size:46px;
+  line-height:.84; letter-spacing:.005em; color:var(--frame-text);
+  font-variant-numeric:tabular-nums;
+}
+/* The unit rides with its number rather than sitting under a caption, so the
+   figure reads as one spoken thing: "one hour". */
+.dialfig i{
+  font-family:"Barlow Condensed",sans-serif; font-style:normal;
+  font-size:.40em; font-weight:600; letter-spacing:.06em;
+  color:var(--frame-text-3); margin:0 .16em 0 .03em;
+}
+/* No timer is a state, not a length of zero — the pool runs the whole way — so
+   it is set as a word and not as a figure a host might read out. */
+.dialfig.off{
+  font-family:"Barlow Condensed",sans-serif; font-size:23px; font-weight:600;
+  line-height:1.1; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--frame-text-3);
+}
+.dialclose{
+  display:block; margin-top:5px;
+  font-family:"Barlow Condensed",sans-serif; font-size:12px; font-weight:600;
+  letter-spacing:.12em; text-transform:uppercase; color:var(--frame-text-2);
+}
+.dialclose b{font-family:inherit; font-weight:600; color:var(--frame-text)}
+.dialcap{
+  margin:0; padding-top:10px; border-top:1px solid var(--frame-line);
+  color:var(--frame-text-3); font-size:13px; line-height:1.45;
+}
+.dialcap b{
+  font-family:"Anton",sans-serif; font-weight:400; font-size:14px;
+  letter-spacing:.01em; color:var(--frame-text-2); font-variant-numeric:tabular-nums;
+}
+
+.dialquick{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px}
+.dialquick .pchip{padding:7px 4px}
+.pchip.wide{width:100%; padding:7px 4px}
+.pchip:disabled{opacity:.4; cursor:not-allowed}
+.pchip:disabled:hover{background:rgba(255,255,255,.04); color:var(--frame-text-2)}
+
+/* The clock, when that is the way the host is holding it: three columns that
+   scroll under a band, the way a phone asks for a time. A host reaching for
+   this mid-broadcast gets a row-high target and a flick, rather than a dropdown
+   whose option list opens over the thing they are setting. Every row is a legal
+   instant, so wherever a column comes to rest is an answer.
+
+   The numbers are load-bearing and match the component's: five rows on screen
+   and two blank rows of padding at each end put row `i` under the band at
+   exactly `i * 34px` of scroll. */
+.wheel{min-width:0}
+.wheelcap{
+  display:block; text-align:center; padding-bottom:5px;
+  font-family:"Barlow Condensed",sans-serif; font-size:11.5px; font-weight:600;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--frame-text-3);
+}
+.wheelbox{position:relative}
+.wheelscroll{
+  position:relative; z-index:1; height:170px; padding:68px 0;
+  overflow-y:auto; overscroll-behavior:contain; scroll-snap-type:y mandatory;
+  scrollbar-width:none; touch-action:pan-y;
+  /* Out at the ends the rows are context, not the answer, so they fade rather
+     than sit at a hard cut. */
+  -webkit-mask-image:linear-gradient(#0000,#000 27%,#000 73%,#0000);
+          mask-image:linear-gradient(#0000,#000 27%,#000 73%,#0000);
+}
+.wheelscroll::-webkit-scrollbar{display:none}
+.wheelrow{
+  display:flex; align-items:center; justify-content:center;
+  width:100%; height:34px; padding:0 4px; scroll-snap-align:center;
+  border:0; background:none; cursor:pointer; white-space:nowrap;
+  font:inherit; font-size:14.5px; color:var(--frame-text-3);
+  transition:color var(--dur-fast) var(--ease);
+}
+.wheelrow:hover:not(:disabled){color:var(--frame-text-2)}
+/* Past the ceiling. Shown rather than removed: a column that silently stops at
+   22 is one the host has to work out the reason for, on camera. */
+.wheelrow:disabled{color:rgba(242,238,250,.26); cursor:not-allowed}
+/* Weight and ink carry the choice; the size step is small on purpose, because a
+   row that grows as it lands reads as movement the host did not ask for. */
+.wheelrow.on{
+  color:var(--frame-text); font-size:16px; font-weight:600;
+  font-variant-numeric:tabular-nums;
+}
+/* The seat the answer sits in. It never moves; the rows move under it. */
+.wheelband{
+  position:absolute; left:0; right:0; top:50%; height:34px; margin-top:-17px;
+  border-radius:var(--r-sm); background:rgba(255,255,255,.07);
+  box-shadow:inset 0 0 0 1px var(--frame-line); pointer-events:none;
+}
+/* The mask would clip an outline drawn on the scroller, so the ring goes round
+   the band instead — which is the part the keyboard is actually moving. */
+.wheelscroll:focus-visible{outline:none}
+.wheel:focus-within .wheelband{box-shadow:inset 0 0 0 2px var(--frame-text)}
+
+/* Demoted from the instrument to the scale the answer lands on, so it gives back
+   the height it needed when it was the only thing in the panel. */
+.dialtrack.slim{height:28px}
+
+.dialsay b{
+  font-family:"Anton",sans-serif; font-weight:400; font-size:15px; letter-spacing:.01em;
+  color:var(--frame-text); font-variant-numeric:tabular-nums;
+}
+/* The panel is a frame surface, so its focus ring is the frame's ink rather than
+   the page's hot pink. */
+.dialpanel :focus-visible{outline:2px solid var(--frame-text); outline-offset:2px}
 
 .dialnote{color:var(--frame-text-2); font-size:13.5px; line-height:1.5}
 .dialfoot{display:flex; align-items:center; gap:9px; padding-top:11px; border-top:1px solid var(--frame-line)}
@@ -1093,6 +1286,14 @@ img.kit{object-fit:contain}
 .board.home .strip{position:sticky; top:0; z-index:30}
 .board.home .churn{align-self:stretch}
 .board.home .frame{overflow:visible}
+/* The rail is the taller column, so its height sets the whole board's — and
+   switching "Build the XI" for "Transfer my team" swaps in texts that wrap to
+   more lines. Centred, the diagram drifted half that delta every time the host
+   changed their mind, which read as the page reloading. Anchored to the top it
+   cannot move, whatever the rail does. Do not chase the rest by reserving line
+   counts in the rail: how many lines that copy wraps to depends on the rail's
+   width, so the numbers are right at one breakpoint and wrong at the next. */
+.board.home .mech{justify-content:flex-start}
 .board.home .pitch{min-height:min(60vh,540px); padding-top:34px; padding-bottom:34px}
 .board.home .pitch{--slot:clamp(58px,7vw,94px)}
 @media (max-width:1000px){

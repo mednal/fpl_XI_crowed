@@ -294,23 +294,45 @@ number the host reads aloud.
 `hot` fill; `.name` is the one chip allowed to truncate and then disappear when the strip
 runs out of room.
 
-**Deadline dial** — the host's closing time, as a strip meter that opens a panel. The
-panel holds a *runway*: a track spanning now to the gameweek deadline, a playhead on it,
-day names marking the midnights it crosses, and four presets worded as distances from the
-deadline. It replaces `input[type=datetime-local]`, whose month grid is the wrong
-instrument twice over — it offers thirty days of which twenty-nine are illegal, and its
-popup is the one surface here the palette cannot reach.
+**Deadline dial** — the host's closing time, as a strip meter that opens a panel. It
+replaces `input[type=datetime-local]`, whose month grid is the wrong instrument twice
+over — it offers thirty days of which twenty-nine are illegal, and its popup is the one
+surface here the palette cannot reach.
 
-The track is deliberately **not linear**. Drawn to scale, a deadline three days out puts
-every adjustment a host makes — minutes and hours, never days — inside the last two per
-cent of it, so distance is measured back from the deadline on a curve whose bend follows
-the length of the runway: a three-hour runway comes out nearly straight, a week-long one
-leans on its final hours, and "an hour before" lands in the same place either way. The day
-marks are placed by the same transform and bunch to the left, which is what shows the
-reader the scale is not uniform. The fill is `frame-hot` (the pool is open), the far stop
-`frame-gold` (the gameweek's own lock). Two placements: `inline` grows the form it sits
-in and takes a hairline; `overlay` floats on a shadow, because the broadcast board holds
-`100dvh` and nothing may push the eleven.
+Hosts hold the question two ways round — "stop it an hour early" and "you've got an
+hour" — and mid-broadcast neither is a translation of the other: the first is measured
+back from the lock, the second forward from now. So the panel opens on a **tab pair**,
+and only the instrument that answers the chosen question is on screen.
+
+*Before the deadline* is a distance: wheel columns whose total is how long before the
+lock voting stops, zero across being the deadline itself, four quick distances under
+them, and a full-width way back to the deadline, because nudging home from three hours
+out would be thirty-six presses.
+
+*Open for* is a timer and nothing else. The gameweek's lock is not its scale and not its
+zero — the columns are a timer's own, hours `0–23` and minutes in fives, whatever the
+deadline happens to be, and the lock only greys out the rows past it rather than
+truncating the column, because a wheel that silently stops at 22 is one the host has to
+work out the reason for on camera. The **length is the headline**: an Anton figure of
+the chosen duration with its units riding alongside it, the clock time it lands on set
+small beneath, and the lock said once, last, on its own hairline — *"Anything up to
+22h 13m, which is where the Gameweek 4 deadline stops it."* An untouched pool has no
+timer, which is a state and not a length of zero, so the figure reads `NO TIMER` in
+condensed caps and the line beneath says what happens instead. Past a day it is the
+columns that run out first, and the sentence points at the tab that does not.
+
+The *runway* stays under the deadline tab, demoted from the instrument to the scale that
+tab's answer lands on — still draggable, still keyboard-operable, still the whole of what
+is legal. It is absent from the timer: a length has no business being drawn against a
+lock it is not measured from. Its track is deliberately **not linear**. Drawn to scale, a
+deadline three days out puts every adjustment a host makes — minutes and hours, never
+days — inside the last two per cent of it, so distance is measured back from the deadline
+on a curve whose bend follows the length of the runway: a three-hour runway comes out
+nearly straight, a week-long one leans on its final hours, and "an hour before" lands in
+the same place either way. Hairlines mark the midnights it crosses. The fill is
+`frame-hot` (the pool is open), the far stop `frame-gold` (the gameweek's own lock). Two
+placements: `inline` grows the form it sits in and takes a hairline; `overlay` floats on
+a shadow, because the broadcast board holds `100dvh` and nothing may push the eleven.
 
 **Browser surfaces are part of the system.** Selection (`hot` on white), the caret
 (`hot`), focus rings, and scrollbars are themed from the palette, and scrollbars inside

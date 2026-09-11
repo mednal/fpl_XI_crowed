@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  applyTransfers, crowdTransfers, fundsLeft, movesAllowed, movesLabel,
+  applyTransfers, crowdCaptain, crowdTransfers, fundsLeft, movesAllowed, movesLabel,
   orderSquad, readFormation, tallyTransfers, transferChecklist, validateHostSquad,
   validateTransfer,
 } from "@/lib/transfers";
@@ -274,6 +274,30 @@ function vote(out: number[], incoming: number[], captain: number | null = null):
     updated_at: "",
   };
 }
+
+describe("the armband after a transfer", () => {
+  const rank = (id: number, count: number) => ({
+    id, player: player(id, 3), count, pct: count * 10,
+  });
+
+  it("gives it to the crowd's pick when they have one", () => {
+    expect(crowdCaptain(base({ captain: 8 }), [], [rank(9, 5), rank(10, 2)])).toBe(9);
+  });
+
+  it("skips a vote for somebody the transfers have just sold", () => {
+    expect(crowdCaptain(base({ captain: 8 }), [9], [rank(9, 5), rank(10, 2)])).toBe(10);
+  });
+
+  it("leaves it with the host when nobody voted", () => {
+    expect(crowdCaptain(base({ captain: 8 }), [3], [])).toBe(8);
+  });
+
+  it("leaves the board without one rather than inventing one", () => {
+    // The captain is sold and no vote survives: a C on an empty shirt would be
+    // the board making a decision the crowd did not.
+    expect(crowdCaptain(base({ captain: 8 }), [8], [])).toBeNull();
+  });
+});
 
 describe("the crowd's transfers", () => {
   it("counts a swap as a share of the voters, not of the transfers", () => {
