@@ -6,12 +6,15 @@ import SquadPitch from "./SquadPitch";
 import { TeamMark } from "./Kit";
 import { Countdown } from "./Countdown";
 import HostBar, { ViewerPreview } from "./HostBar";
+import SlotMenu, { MenuButton } from "./SlotMenu";
 import { poolLock } from "@/lib/lock";
 import { getBrowserClient } from "@/lib/supabase";
-import { MAXCLUB, money, pctText } from "@/lib/squad";
+import {
+  MAXCLUB, applySwap, money, pctText, swapFormation, type SlotRef,
+} from "@/lib/squad";
 import {
   DEFAULT_MOVES, applyTransfers, clubCounts, crowdCaptain, crowdTransfers,
-  fundsLeft, hostIds, movesAllowed, squadValue,
+  fromSlots, fundsLeft, hostIds, movesAllowed, movesLabel, squadValue, toSlots,
 } from "@/lib/transfers";
 import type { SwapRank } from "@/lib/transfers";
 import type { Bootstrap, HostSquad, Pool, Ranked, Team, TransferRow } from "@/lib/types";
@@ -71,6 +74,17 @@ export default function TransferBoard({
   // changes — this browser is still the host and the server still knows it — so
   // it is state and not a round trip.
   const [preview, setPreview] = useState(false);
+  // The host's own arrangement of the same fifteen. The crowd votes on who is
+  // in the squad, never on who starts, so when a transfer the host is trying
+  // brings a player into a bench slot the answer to "how would he look in the
+  // eleven" has to be on this screen — the alternative is leaving the board to
+  // find out. Like the trial itself: this browser only, nothing written.
+  const [arranged, setArranged] = useState<HostSquad>(squad);
+  const [subbing, setSubbing] = useState<SlotRef | null>(null);
+  const [menu, setMenu] = useState<{ id: number; anchor: HTMLElement } | null>(null);
+  // Whether the host has moved an armband themselves. Until they do, the board
+  // answers with the crowd's vote — which is the question the pool asked.
+  const [ownArmband, setOwnArmband] = useState(false);
   const [copied, setCopied] = useState<"" | "done" | "manual">("");
   const [link, setLink] = useState("");
   const linkRef = useRef<HTMLElement | null>(null);
@@ -138,6 +152,13 @@ export default function TransferBoard({
     };
   }, [pool.id]);
 
+  useEffect(() => {
+    setArranged(squad);
+    setSubbing(null);
+    setMenu(null);
+    setOwnArmband(false);
+  }, [squad]);
+
   const cx = useMemo(
     () => crowdTransfers(rows, squad, byId, moves),
     [rows, squad, byId, moves],
@@ -176,12 +197,19 @@ export default function TransferBoard({
   // What is actually on the pitch: the host's fifteen, plus whatever they are
   // trying. Every number in the foot is read off this and not off the crowd's
   // result, so the shirts and the figures under them are the same team.
-  const shown = useMemo(
-    () => (trial.length
-      ? applyTransfers(squad, outIds, inIds, crowdCaptain(squad, outIds, cx.captain))
-      : squad),
-    [squad, trial.length, outIds, inIds, cx.captain],
-  );
+  const shown = useMemo(() => {
+    if (!trial.length) return arranged;
+    // An armband the host has moved is worn by whoever is standing in that slot
+    // — his own player, or the signing a trial put there. Left alone it is the
+    // crowd's vote, which is what the board is for.
+    const wearing = (id: number) => trial.find((sw) => sw.out.id === id)?.in.id ?? id;
+    const cap = ownArmband
+      ? wearing(arranged.captain)
+      : crowdCaptain(arranged, outIds, cx.captain);
+    const team = applyTransfers(arranged, outIds, inIds, cap);
+    const vice = wearing(arranged.vice);
+    return team.xi.includes(vice) ? { ...team, vice } : team;
+  }, [arranged, trial, outIds, inIds, cx.captain, ownArmband]);
   const bank = trial.length ? fundsLeft(squad, outIds, inIds, byId) : squad.bank ?? 0;
   const value = squadValue(shown, byId);
   const stacked = useMemo(
@@ -210,7 +238,61 @@ export default function TransferBoard({
     return () => clearTimeout(t);
   }, [inNow]);
 
+  // What this browser may do, and what it is currently being shown. The first is
+  // the pool's answer; the second is the host's own choice of screen.
+  const hostView = isHost && !preview;
+
   const incoming = new Map(trial.map((s) => [s.in.id, s]));
+
+  /* A shirt on the pitch may be a player the host does not own yet — one the
+     trial brought in. Substitutions are made on the team that is actually
+     saved, so a signing stands in for the player whose slot he took: the two
+     share a position, and `applyTransfers` leaves them the same slot, so the
+     swap the host sees is the swap the arrangement gets. */
+  const slots = useMemo(() => toSlots(arranged, byId), [arranged, byId]);
+  const standIn = new Map(trial.map((s) => [s.in.id, s.out.id]));
+
+  /** The shirt a saved player is wearing on the board right now — his own, or
+   *  the signing standing in his slot while the host tries a transfer. */
+  function shownAs(id: number): number {
+    return trial.find((s) => s.out.id === id)?.in.id ?? id;
+  }
+
+  function refOf(id: number): SlotRef | null {
+    const owned = standIn.get(id) ?? id;
+    const pos = byId.get(owned)?.pos;
+    if (!pos) return null;
+    const index = slots.p[pos].indexOf(owned);
+    return index < 0 ? null : { pos, index };
+  }
+
+  function substitute(a: SlotRef, b: SlotRef) {
+    setArranged((prev) => fromSlots(applySwap(toSlots(prev, byId), a, b), prev));
+    setSubbing(null);
+    setMenu(null);
+  }
+
+  /** An armband the host moves on the board. It is kept against the player
+   *  whose slot it is, so toggling a transfer off does not lose it. */
+  function setArmband(id: number, which: "captain" | "vice") {
+    const owned = standIn.get(id) ?? id;
+    setArranged((prev) => ({
+      ...prev,
+      captain: which === "captain" ? owned : prev.captain === owned ? 0 : prev.captain,
+      vice: which === "vice" ? owned : prev.vice === owned ? 0 : prev.vice,
+    }));
+    setOwnArmband(true);
+    setMenu(null);
+  }
+
+  /** Back to the eleven as it is saved, trial and arrangement both. */
+  function backToMyTeam() {
+    setTried([]);
+    setSubbing(null);
+    setMenu(null);
+    setOwnArmband(false);
+    setArranged(squad);
+  }
 
   /** A transfer that needs a player one already being tried has taken. */
   const taken = new Set(trial.flatMap((s) => [s.out.id, s.in.id]));
@@ -223,12 +305,46 @@ export default function TransferBoard({
 
   const decorate = (id: number) => {
     const swap = incoming.get(id);
-    if (!swap) return {};
+    const player = byId.get(id);
+    const mark = swap
+      ? {
+          className: crossed.has(id) ? "arriving" : "chosen",
+          sub: `for ${swap.out.n} · ${pctText(swap.pct)}`,
+          subClass: "pct",
+          title: `${swap.count} of ${cx.n} viewers want ${swap.out.n} replaced by ${swap.in.n}`,
+        }
+      : {};
+
+    // A viewer's board is a result, not a control. Only the host's own screen
+    // hands out the shirts, and not while they are previewing the crowd's.
+    if (!hostView) return mark;
+
+    const ref = refOf(id);
+    if (!ref) return mark;
+
+    if (subbing) {
+      const chosen = subbing.pos === ref.pos && subbing.index === ref.index;
+      const target = !chosen && !!swapFormation(slots, subbing, ref);
+      return {
+        ...mark,
+        className: chosen ? "chosen" : target ? "target" : "dim",
+        title: chosen
+          ? "Tap again to leave him where he is"
+          : target
+            ? `Swap with ${player?.n ?? "him"}`
+            : "This swap would not leave a legal team",
+        onClick: chosen
+          ? () => setSubbing(null)
+          : target
+            ? () => substitute(subbing, ref)
+            : undefined,
+      };
+    }
+
     return {
-      className: crossed.has(id) ? "arriving" : "chosen",
-      sub: `for ${swap.out.n} · ${pctText(swap.pct)}`,
-      subClass: "pct",
-      title: `${swap.count} of ${cx.n} viewers want ${swap.out.n} replaced by ${swap.in.n}`,
+      ...mark,
+      title: `${player?.n ?? "This player"} — tap for the armband or a substitution.`,
+      onClick: (e: React.MouseEvent<HTMLButtonElement>) => setMenu({ id, anchor: e.currentTarget }),
     };
   };
 
@@ -253,9 +369,9 @@ export default function TransferBoard({
   const captainNow = byId.get(shown.captain);
   const capVote = cx.captain[0];
 
-  // What this browser may do, and what it is currently being shown. The first is
-  // the pool's answer; the second is the host's own choice of screen.
-  const hostView = isHost && !preview;
+  const menuPlayer = menu ? byId.get(menu.id) : undefined;
+  const menuRef = menu ? refOf(menu.id) : null;
+  const menuStarter = menu ? shown.xi.includes(menu.id) : false;
 
   return (
     <div className={`board fixed${hostView ? " hosted" : ""}`}>
@@ -274,7 +390,6 @@ export default function TransferBoard({
           <span className="lab">Votes in</span>
           <b className="num">{cx.n}</b>
         </span>
-        <Link className="btn btn-sm" href={`/p/${pool.id}`}>Vote</Link>
       </header>
 
       {hostView && (
@@ -316,7 +431,7 @@ export default function TransferBoard({
             onOpen={() => setDeckOpen((o) => !o)}
             onToggle={toggleTry}
             onVerdict={() => setTried(cx.applied.map((s) => s.key))}
-            onClear={() => setTried([])}
+            onClear={backToMyTeam}
           />
         )}
         <SquadPitch
@@ -342,7 +457,7 @@ export default function TransferBoard({
           <dt className="lab">Armband</dt>
           <dd className="sm">
             {captainNow
-              ? capVote && capVote.id === captainNow.id
+              ? !ownArmband && capVote && capVote.id === captainNow.id
                 ? `${captainNow.n} · ${pctText(capVote.pct)}`
                 : `${captainNow.n} · the host's`
               : "—"}
@@ -361,6 +476,15 @@ export default function TransferBoard({
         <span className="spacer" />
         {/* Which team the shirts are: the host's, or the host's with something
             tried on it. A board on camera never leaves that to be guessed. */}
+        {subbing && (
+          <>
+            <span className="chip try">
+              Swapping {byId.get(shownAs(slots.p[subbing.pos][subbing.index] ?? 0))?.n ?? "him"} — tap
+              who he changes places with
+            </span>
+            <button className="btn btn-sm" onClick={() => setSubbing(null)}>Cancel</button>
+          </>
+        )}
         {trial.length > 0 && (
           <span className="chip try">
             Trying {trial.length === 1 ? "one transfer" : `${trial.length} transfers`}
@@ -473,33 +597,97 @@ export default function TransferBoard({
           </section>
         )}
 
-        <section className="mod sharemod" style={{ borderBottom: 0 }}>
-          <h2>Share with your viewers</h2>
+        {/* The door out of the board, and it is a different door for each side
+            of the pool: the crowd votes, the host does not — their answer is the
+            team itself. It sat in the strip as "Vote", which read like an
+            instruction to the room rather than a way off the screen. */}
+        <section className="mod votemod">
+          <h2>{hostView ? "Your team" : "Your own vote"}</h2>
           <div className="modbody">
-            <div className="shrow">
-              <span className="poolcode">{pool.id}</span>
-              <div className="sharebox">
-                <code ref={linkRef} onClick={() => selectNode(linkRef.current)}>
-                  {link || `/p/${pool.id}`}
-                </code>
-                <button className="btn btn-sm btn-primary" onClick={copy}>
-                  {copied === "done" ? "Copied" : "Copy"}
-                </button>
-              </div>
-            </div>
-            {locked && (
-              <p className="hint">
-                Voting is closed. The link still works — it shows a viewer the team, locked.
-              </p>
-            )}
-            {copied === "manual" && (
-              <p className="hint">
-                Your browser blocked the copy — the link is selected, press Ctrl+C (⌘C on a Mac).
-              </p>
+            {hostView ? (
+              <>
+                <p className="hint">
+                  Make the transfers, move the armband, change the bench — inside the
+                  {" "}{movesLabel(moves).toLowerCase()} you gave the crowd.
+                </p>
+                <Link className="btn btn-primary" href={`/p/${pool.id}/manage`}>
+                  Manage my team
+                </Link>
+              </>
+            ) : (
+              <>
+                <p className="hint">
+                  {locked
+                    ? "Voting is closed. The voting page still opens — it shows the team, locked."
+                    : "Change the transfers you picked, or vote for the first time. It counts in the numbers above like anybody else's."}
+                </p>
+                <Link className="btn btn-primary" href={`/p/${pool.id}`}>
+                  {locked ? "Open the voting page" : "Edit my vote"}
+                </Link>
+              </>
             )}
           </div>
         </section>
+
+        {/* The link and the pool code are the host's to hand out. A viewer who
+            already has the link has no use for them, and a board on stream is
+            not the place to invite one to pass it on. */}
+        {hostView && (
+          <section className="mod sharemod" style={{ borderBottom: 0 }}>
+            <h2>Share with your viewers</h2>
+            <div className="modbody">
+              <div className="shrow">
+                <span className="poolcode">{pool.id}</span>
+                <div className="sharebox">
+                  <code ref={linkRef} onClick={() => selectNode(linkRef.current)}>
+                    {link || `/p/${pool.id}`}
+                  </code>
+                  <button className="btn btn-sm btn-primary" onClick={copy}>
+                    {copied === "done" ? "Copied" : "Copy"}
+                  </button>
+                </div>
+              </div>
+              {locked && (
+                <p className="hint">
+                  Voting is closed. The link still works — it shows a viewer the team, locked.
+                </p>
+              )}
+              {copied === "manual" && (
+                <p className="hint">
+                  Your browser blocked the copy — the link is selected, press Ctrl+C (⌘C on a Mac).
+                </p>
+              )}
+            </div>
+          </section>
+        )}
       </aside>
+
+      {/* The same box the manage screen opens, because it is the same question
+          asked of the same shirt. What it does not carry is a transfer: on this
+          screen those come from the crowd, out of the deck. */}
+      {hostView && menu && menuPlayer && menuRef && !subbing && (
+        <SlotMenu anchor={menu.anchor} onClose={() => setMenu(null)}>
+          <div className="slotmenu-head">
+            <b>{menuPlayer.n}</b>
+            <div className="hint">
+              {teams.get(menuPlayer.team)?.name} · {money(menuPlayer.cost)}
+            </div>
+          </div>
+          {menuStarter && shown.captain !== menuPlayer.id && (
+            <MenuButton onClick={() => setArmband(menuPlayer.id, "captain")}>
+              Make captain
+            </MenuButton>
+          )}
+          {menuStarter && shown.vice !== menuPlayer.id && (
+            <MenuButton onClick={() => setArmband(menuPlayer.id, "vice")}>
+              Make vice-captain
+            </MenuButton>
+          )}
+          <MenuButton onClick={() => { setSubbing(menuRef); setMenu(null); }}>
+            {menuStarter ? "Substitute" : "Bring on"}
+          </MenuButton>
+        </SlotMenu>
+      )}
     </div>
   );
 }
@@ -551,8 +739,8 @@ function TryDeck({
       {open && (
         <div className="trypanel">
           <p className="dialsay">
-            The team on the board is yours. Put a transfer on the pitch to see it — nothing is
-            saved, and nobody&apos;s vote moves.
+            The team on the board is yours. Put a transfer on the pitch to see it, and tap a shirt
+            for the armband or a substitution — nothing is saved, and nobody&apos;s vote moves.
           </p>
           <ul className="trylist">
             {swaps.slice(0, TRY_ROWS).map((s, i) => {

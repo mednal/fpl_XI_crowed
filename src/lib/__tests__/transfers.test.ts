@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  applyTransfers, crowdCaptain, crowdTransfers, fundsLeft, movesAllowed, movesLabel,
-  orderSquad, readFormation, tallyTransfers, transferChecklist, validateHostSquad,
-  validateTransfer,
+  applyTransfers, crowdCaptain, crowdTransfers, fromSlots, fundsLeft, movesAllowed,
+  movesLabel, orderSquad, readFormation, tallyTransfers, toSlots, transferChecklist,
+  validateHostSquad, validateTransfer,
 } from "@/lib/transfers";
+import { applySwap, isStarter } from "@/lib/squad";
 import type { HostSquad, Player, TransferRow } from "@/lib/types";
 import { index, player, world } from "./fixtures";
 
@@ -299,6 +300,59 @@ describe("the armband after a transfer", () => {
   });
 });
 
+describe("the host's team in the picker's slots", () => {
+  it("puts the starters where the picker looks for them", () => {
+    const { byId } = squadWorld();
+    const sq = base();
+    const slots = toSlots(sq, byId);
+
+    expect(slots.formation).toBe(readFormation(sq.xi, byId));
+    for (const id of sq.xi) {
+      const pos = byId.get(id)!.pos;
+      expect(isStarter(slots, { pos, index: slots.p[pos].indexOf(id) })).toBe(true);
+    }
+    for (const id of sq.bench) {
+      const pos = byId.get(id)!.pos;
+      expect(isStarter(slots, { pos, index: slots.p[pos].indexOf(id) })).toBe(false);
+    }
+  });
+
+  it("comes back the same team it went in as", () => {
+    const { byId } = squadWorld();
+    const sq = base();
+    const back = fromSlots(toSlots(sq, byId), sq);
+
+    expect(new Set(back.xi)).toEqual(new Set(sq.xi));
+    expect(new Set(back.bench)).toEqual(new Set(sq.bench));
+    expect(back.captain).toBe(sq.captain);
+    expect(back.bank).toBe(sq.bank);      // the slots do not carry the money
+  });
+
+  it("carries a substitution back as a change of XI and shape", () => {
+    const { byId } = squadWorld();
+    const sq = base();
+    const slots = toSlots(sq, byId);
+    // A defender off, a forward on: the swap the squad picker already knows how
+    // to judge, made on the host's own team.
+    const off = sq.xi.find((id) => byId.get(id)!.pos === 2)!;
+    const on = sq.bench.find((id) => byId.get(id)!.pos === 4)!;
+    const after = fromSlots(
+      applySwap(
+        slots,
+        { pos: 2, index: slots.p[2].indexOf(off) },
+        { pos: 4, index: slots.p[4].indexOf(on) },
+      ),
+      sq,
+    );
+
+    expect(after.xi).toContain(on);
+    expect(after.xi).not.toContain(off);
+    expect(after.bench).toContain(off);
+    expect(after.formation).toBe(readFormation(after.xi, byId));
+    expect(validateHostSquad(after, byId)).toEqual([]);
+  });
+});
+
 describe("the crowd's transfers", () => {
   it("counts a swap as a share of the voters, not of the transfers", () => {
     const { byId } = squadWorld();
@@ -344,6 +398,20 @@ describe("the crowd's transfers", () => {
     const cx = crowdTransfers(rows, base({ captain: 9, vice: 10 }), byId, 2);
     expect(cx.applied).toHaveLength(1);
     expect(cx.applied[0].in.id).toBe(18);
+  });
+
+  it("skips a swap the host has already made themselves", () => {
+    const { byId } = squadWorld();
+    const rows = [vote([8], [18], 9), vote([8], [18], 9), vote([3], [17], 9)];
+    // The host went and did the winning transfer on their own team. The vote
+    // for it is history now: 8 is not there to sell and 18 is not there to buy.
+    const after = crowdTransfers(rows, base({ captain: 9, vice: 10 }), byId, 1).squad;
+
+    const cx = crowdTransfers(rows, { ...after, bank: 250 }, byId, 1);
+    expect(cx.applied).toHaveLength(1);
+    expect(cx.applied[0].key).toBe("3>17");     // the next one the team can make
+    expect(cx.bank).toBe(250);                  // and no money moves for the old one
+    expect(cx.swaps[0].key).toBe("8>18");       // the rail still reports the vote
   });
 
   it("reports a shortfall rather than dropping the winner", () => {

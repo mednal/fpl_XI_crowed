@@ -20,7 +20,9 @@
  * screen rather than assumed silently.
  */
 
-import { FORMS, MAXCLUB, POS, POSITIONS, SQUAD, money, startCount } from "./squad";
+import {
+  FORMS, MAXCLUB, POS, POSITIONS, SQUAD, benchIds, money, startCount, xiIds, type Squad,
+} from "./squad";
 import type { HostSquad, Player, PosId, Ranked, TransferInput, TransferRow } from "./types";
 
 /** How many transfers a viewer may make when the host has not said. */
@@ -38,7 +40,7 @@ export function movesAllowed(moves: number | null | undefined): number {
 export function movesLabel(moves: number | null | undefined): string {
   const n = moves ?? DEFAULT_MOVES;
   if (n <= 0 || n > MAX_MOVES) return "Unlimited transfers";
-  return n === 1 ? "One transfer each" : `${n} transfers each`;
+  return n === 1 ? "One transfer" : `${n} transfers`;
 }
 
 /** Everyone in the host's team, XI first. */
@@ -172,6 +174,43 @@ export function orderSquad(sq: HostSquad, byId: Map<number, Player>): HostSquad 
   const xi = [...(sq.xi ?? [])].sort(byPos);
   const bench = [...(sq.bench ?? [])].sort(byPos);
   return { ...sq, xi, bench, formation: readFormation(xi, byId) };
+}
+
+/**
+ * The host's fifteen as the slot model the squad picker works in, and back
+ * again. A substitution is the one thing `squad.ts` already knows how to do —
+ * which player may swap with which, and what shape it leaves the team in — and
+ * a host rearranging their own side should get exactly the answer a viewer
+ * building one gets, so the team is converted rather than the rule rewritten.
+ *
+ * Starters come first in each position's slots, which is what makes
+ * `isStarter` true of them: it is the same fact as being in the XI.
+ */
+export function toSlots(sq: HostSquad, byId: Map<number, Player>): Squad {
+  const at = (pos: PosId, ids: number[]) => ids.filter((id) => byId.get(id)?.pos === pos);
+  const p = { 1: [], 2: [], 3: [], 4: [] } as Record<PosId, (number | null)[]>;
+  for (const k of POSITIONS) {
+    p[k] = [...at(k, sq.xi ?? []), ...at(k, sq.bench ?? [])];
+  }
+  return {
+    formation: readFormation(sq.xi ?? [], byId),
+    p,
+    captain: sq.captain || null,
+    vice: sq.vice || null,
+  };
+}
+
+/** The other way, keeping everything about the team the slots do not carry —
+ *  the bank, and where it was imported from. */
+export function fromSlots(slots: Squad, sq: HostSquad): HostSquad {
+  return {
+    ...sq,
+    formation: slots.formation,
+    xi: xiIds(slots),
+    bench: benchIds(slots),
+    captain: slots.captain ?? 0,
+    vice: slots.vice ?? 0,
+  };
 }
 
 /* ================= checking a viewer's transfers ================= */
@@ -450,8 +489,15 @@ export function crowdTransfers(
 
   const applied: SwapRank[] = [];
   const used = new Set<number>();
+  // Votes outlive the team they were cast about: once the host has gone and
+  // made a transfer themselves, the crowd's list still holds swaps that sell a
+  // player who has already gone, or sign one who is already here. Those are not
+  // unpopular, they are impossible, and counting them would take money out of a
+  // bank for a sale that never happened. The rails go on showing every vote.
+  const owned = new Set(hostIds(sq));
   for (const s of swaps) {
     if (applied.length >= cap) break;
+    if (!owned.has(s.out.id) || owned.has(s.in.id)) continue;
     if (used.has(s.out.id) || used.has(s.in.id)) continue;
     used.add(s.out.id);
     used.add(s.in.id);

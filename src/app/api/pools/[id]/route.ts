@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getBootstrap } from "@/lib/fpl";
 import { VOTER_COOKIE, readVoter } from "@/lib/identity";
-import { parseDeadline } from "@/lib/lock";
+import { parseDeadline, poolLock } from "@/lib/lock";
 import { getServiceClient } from "@/lib/supabase";
-import { MAX_MOVES, movesAllowed, movesLabel, orderSquad, validateHostSquad } from "@/lib/transfers";
+import {
+  MAX_MOVES, hostIds, movesAllowed, movesLabel, orderSquad, validateHostSquad,
+} from "@/lib/transfers";
 import type { HostSquad, Player } from "@/lib/types";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
@@ -61,7 +63,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
 
   const { data: pool, error: poolErr } = await supabase
     .from("pools")
-    .select("id, gw, kind, moves, deadline, closed_at, host_voter")
+    .select("id, gw, kind, moves, deadline, closed_at, host_voter, squad")
     .eq("id", id)
     .maybeSingle();
 
@@ -115,31 +117,15 @@ export async function PATCH(req: Request, { params }: Ctx) {
     patch.moves = moves;
   }
 
-  // The host's own team, from the setup screen. It is checked here from
-  // scratch against real prices, exactly like a viewer's entry: the browser
-  // that sends it is the host's, which makes it trusted with the pool and not
-  // with the fifteen players in the body.
+  // The host's own team, from the setup screen or the manage screen. It is
+  // checked here from scratch against real prices, exactly like a viewer's
+  // entry: the browser that sends it is the host's, which makes it trusted with
+  // the pool and not with the fifteen players in the body.
   if ("squad" in body) {
     if (pool.kind !== "transfer") {
       return NextResponse.json(
         { error: "Only a transfer pool has a team of its own. Start one to put your squad up." },
         { status: 400 },
-      );
-    }
-
-    // Replacing the team under votes that have already been cast would leave
-    // every one of them pointing at a player who is no longer there.
-    const { count } = await supabase
-      .from("transfers")
-      .select("id", { count: "exact", head: true })
-      .eq("pool_id", id);
-    if (count) {
-      return NextResponse.json(
-        {
-          error:
-            "Viewers have already voted on this team, so it cannot be swapped out from under them. Start a new pool to put up a different squad.",
-        },
-        { status: 409 },
       );
     }
 
@@ -170,6 +156,37 @@ export async function PATCH(req: Request, { params }: Ctx) {
     if (errs.length) {
       return NextResponse.json({ error: errs[0], errors: errs }, { status: 400 });
     }
+
+    // Changing *who is in* the team under votes already cast would leave every
+    // one of them pointing at a player who is no longer there, so that waits
+    // until voting is shut — which is exactly when a host makes the transfer
+    // the crowd asked for. Rearranging the same fifteen — a substitution, the
+    // armband, the shape — is safe at any time: every vote still names a player
+    // who is in the squad.
+    const before = (pool.squad as HostSquad | null) ?? null;
+    const sameFifteen = before
+      ? (() => {
+          const was = new Set(hostIds(before));
+          const now = hostIds(ordered);
+          return was.size === now.length && now.every((pid) => was.has(pid));
+        })()
+      : false;
+    if (before && !sameFifteen) {
+      const shut = poolLock({ deadline: pool.deadline, closed_at: pool.closed_at }).locked;
+      const { count } = await supabase
+        .from("transfers")
+        .select("id", { count: "exact", head: true })
+        .eq("pool_id", id);
+      if (count && !shut) {
+        return NextResponse.json(
+          {
+            error: `${count === 1 ? "Someone has" : `${count} viewers have`} voted on this team, so close the voting on your board before you change who is in it. Substitutions and the armband can be saved while voting is open.`,
+          },
+          { status: 409 },
+        );
+      }
+    }
+
     patch.squad = ordered;
   }
 

@@ -523,7 +523,10 @@ img.kit{object-fit:contain}
   flex:0 0 auto; min-width:46px; text-align:right; font-family:"Anton",sans-serif;
   font-size:14px; font-variant-numeric:tabular-nums; color:var(--frame-text);
 }
-.churn.still .sharemod{flex:0 0 auto}
+.churn.still .sharemod, .churn.still .votemod{flex:0 0 auto}
+/* The door back to the voting page. A button the width of the rail, so it
+   reads as a way out of the board rather than another statistic. */
+.votemod .modbody .btn{align-self:stretch; justify-content:center}
 /* Read at TV distance on a compressed stream: the figures carry the row. */
 .churn.still .rank{padding:10px 15px; gap:5px}
 .churn.still .rank .nm{font-size:15px}

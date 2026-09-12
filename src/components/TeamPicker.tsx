@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Bench, PitchRows, type SlotView } from "./Pitch";
+import SlotMenu, { MenuButton } from "./SlotMenu";
 import { Kit, TeamMark } from "./Kit";
 import { Countdown } from "./Countdown";
 import { lockNote, poolLock } from "@/lib/lock";
@@ -15,9 +16,6 @@ import {
 import type { Bootstrap, HostSquad, Player, PosId, Pool } from "@/lib/types";
 
 type Menu = { pos: PosId; index: number; anchor: HTMLElement } | null;
-
-const MENU_GAP = 6;
-const MENU_EDGE = 8;
 
 /**
  * Only the checks still outstanding are drawn, on one line, in two or three
@@ -91,8 +89,6 @@ export default function TeamPicker({
   // Counts presses of Send made with something still missing. It is a count and
   // not a flag so that pressing again replays the nudge on the same complaint.
   const [nags, setNags] = useState(0);
-  const [menuAt, setMenuAt] = useState({ left: 0, top: 0 });
-  const menuRef = useRef<HTMLDivElement | null>(null);
   const bannerRef = useRef<HTMLDivElement | null>(null);
 
   // The picker's copy of the verdict, so a viewer arriving at a pool that has
@@ -121,51 +117,7 @@ export default function TeamPicker({
     if (saves) bannerRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [saves]);
 
-  useEffect(() => {
-    const close = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(null);
-    };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, []);
-
-  /**
-   * The menu is fixed, so it has to be re-pinned to its shirt on every scroll or
-   * it drifts across the page. It flips above the shirt when there is no room
-   * below — otherwise a bench player's menu opens past the bottom of the screen
-   * where fixed positioning puts it out of reach.
-   */
-  useLayoutEffect(() => {
-    const anchor = menu?.anchor;
-    const el = menuRef.current;
-    if (!anchor || !el) return;
-
-    const pin = () => {
-      const a = anchor.getBoundingClientRect();
-      if (a.bottom < 0 || a.top > window.innerHeight) { setMenu(null); return; }
-      const { width, height } = el.getBoundingClientRect();
-      const below = a.bottom + MENU_GAP;
-      const above = a.top - MENU_GAP - height;
-      const top = below + height <= window.innerHeight - MENU_EDGE
-        ? below
-        : above >= MENU_EDGE
-          ? above
-          : Math.max(MENU_EDGE, window.innerHeight - MENU_EDGE - height);
-      const left = Math.min(
-        Math.max(MENU_EDGE, a.left + a.width / 2 - width / 2),
-        Math.max(MENU_EDGE, window.innerWidth - MENU_EDGE - width),
-      );
-      setMenuAt((cur) => (cur.left === left && cur.top === top ? cur : { left, top }));
-    };
-
-    pin();
-    window.addEventListener("scroll", pin, true);
-    window.addEventListener("resize", pin);
-    return () => {
-      window.removeEventListener("scroll", pin, true);
-      window.removeEventListener("resize", pin);
-    };
-  }, [menu]);
+  const shutMenu = useCallback(() => setMenu(null), []);
 
   const sc = startCount(sq.formation);
   const ids = squadIds(sq);
@@ -592,7 +544,7 @@ export default function TeamPicker({
       </aside>
 
       {showMenu && (
-        <div ref={menuRef} className="slotmenu" style={{ left: menuAt.left, top: menuAt.top }}>
+        <SlotMenu anchor={menu.anchor} onClose={shutMenu}>
           <div className="slotmenu-head">
             <b>{menuPlayer.n}</b>
             <div className="hint">
@@ -620,7 +572,7 @@ export default function TeamPicker({
             setSq((prev) => removeFromSquad(prev, { pos: menu.pos, index: menu.index }));
             setMenu(null);
           }}>Take out of the squad</MenuButton>
-        </div>
+        </SlotMenu>
       )}
     </div>
   );
@@ -629,14 +581,6 @@ export default function TeamPicker({
 /** The button says what is missing, so a viewer never taps a dead control. */
 function sendBlurb(n: number): string {
   return n === 1 ? "One thing left before you can send" : `${n} things left before you can send`;
-}
-
-function MenuButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
-  return (
-    <button className="btn btn-ghost btn-sm" onClick={onClick}>
-      {children}
-    </button>
-  );
 }
 
 /** Where a half-built squad is kept between visits. A host's base team and

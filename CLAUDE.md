@@ -79,14 +79,17 @@ Browser ──picks squad──> POST /api/pools/[id]/entries ──validated─
 - **`src/app/api/`** — every write. The browser never writes to Supabase directly.
 - **`src/components/`** — `TeamPicker` (picking; also builds a host's base team when
   given `onHostSave`), `LiveBoard` (results), `Scoreboard` (the leaderboard),
-  `TransferPicker`/`TransferBoard`/`HostSetup` (the transfer pool's three screens),
+  `TransferPicker`/`TransferBoard`/`HostSetup`/`HostTeam` (the transfer pool's
+  screens: vote, board, put a team up, change the one that is up),
+  `SlotMenu` (the box a shirt opens, shared by both pickers),
   `SquadPitch` (a whole fifteen drawn read-only, shared by all three),
   `Pitch`/`Kit` (drawn shirts), `assets.ts` (artwork manifest).
 
 A transfer pool's own pieces: `POST /api/pools` takes `kind` and `moves`;
 `PATCH /api/pools/[id]` takes the host's `squad`; `POST /api/pools/[id]/transfers`
 is the vote; `GET /api/fpl/entry/[id]` imports a real FPL team. The host sets up at
-`/p/[id]/setup`, viewers vote at `/p/[id]`, and the board is the same `/p/[id]/live`.
+`/p/[id]/setup`, changes that team at `/p/[id]/manage`, viewers vote at `/p/[id]`,
+and the board is the same `/p/[id]/live`.
 
 Styling is plain CSS in `src/app/globals.css` with CSS custom properties and a
 light/dark palette. No Tailwind, no CSS-in-JS — match that.
@@ -141,7 +144,17 @@ light/dark palette. No Tailwind, no CSS-in-JS — match that.
    come back alongside for the board to point at, and a negative bank is *reported*.
    Replacing the winner with the runner-up would put a transfer on stream that
    nobody voted for.
-10. **Selling prices are today's prices.** FPL only reveals a player's selling price
+10. **The host acts on the vote; the crowd never acts on the team.** Only
+    `/p/[id]/manage` changes the fifteen, and `PATCH` tells two edits apart:
+    rearranging the same fifteen — a substitution, the armband, the shape — is
+    saveable whenever, because every vote still names a player who is there;
+    changing *who is in* the squad waits until voting is shut, which is when a
+    host makes the transfer anyway. On the board those edits are a trial and
+    nothing else: the host may try the crowd's swaps and sub the eleven around
+    on their own screen, and none of it is written or shown to a viewer.
+    `crowdTransfers()` skips a swap the current squad cannot make, so once the
+    host has acted the board stops counting money for a sale already made.
+11. **Selling prices are today's prices.** FPL only reveals a player's selling price
     to the manager who owns him, behind his login, so `transfers.ts` values a player
     at his current price on both sides of the trade. The bank is real — it comes
     back with the imported picks. The screens say so rather than assuming quietly.

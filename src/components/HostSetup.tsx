@@ -268,7 +268,7 @@ export default function HostSetup({ pool, boot }: { pool: Pool; boot: Bootstrap 
             </button>
             <p className="hint">
               {already
-                ? "The team can only be replaced while nobody has voted. Once transfers are in, changing it would leave every vote pointing at a player who is no longer there."
+                ? "A whole new team can go up while nobody has voted, or once you have closed the voting. To change the team you already have — a transfer, the armband, the bench — manage it from the board instead."
                 : "Then you get the link to share. Viewers see this team and vote on the transfers you should make."}
             </p>
           </div>
