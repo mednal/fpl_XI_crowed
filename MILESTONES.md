@@ -208,20 +208,29 @@ rank themselves live. ✅
 
 ---
 
-## M4 — Artwork
+## M4 — Artwork ✅ decided: keep the drawn kits
 
-Everything is drawn in code today: `KIT_ASSETS` and `BADGE_ASSETS` are empty and
-`CHANNEL_LOGO` is null. A part-finished set is fine — clubs left out keep the drawn
-shirt.
+Everything is drawn in code: `KIT_ASSETS` and `BADGE_ASSETS` are empty and
+`CHANNEL_LOGO` is null. Decided to ship this way rather than sourcing real PNGs —
+the drawn shirts in `src/components/assets.ts` were built to stand on their own
+(the band-count rule that tells Sunderland/Southampton/Sheffield United's stripes
+apart exists for exactly this reason), so a "part-finished set" was never actually
+a gap to close. `KIT_ASSETS`/`BADGE_ASSETS` stay open for real artwork later if a
+host ever wants it, but nothing is blocked on that happening.
 
-- [ ] Add kit PNGs to `public/kits/` (transparent, ~256×248) and register the codes
-- [ ] Add badges to `public/badges/` (square, ~64×64) and register the codes
-- [ ] Set `CHANNEL_LOGO`
-- [ ] Check the live screen at stream resolution — it is the one that goes on camera,
-      so it has to read at a distance and in both light and dark
+- [x] Add kit PNGs — declined, drawn kits are the permanent art
+- [x] Add badges — declined, drawn badges are the permanent art
+- [x] Set `CHANNEL_LOGO` — declined, stays `null` (plain mark) until a host needs
+      branding, which is M6/M7 territory anyway
+- [x] Check the live screen at stream resolution — checked at 1536×760 (real
+      screen size after Windows 125% scaling, not naive 1920×1080) with a
+      seeded 20-viewer crowd: armband list, name-plates and strips stay
+      legible at zoom, `.board`'s `100dvh` + `overflow:hidden` clamps with no
+      scrollbar or clipping, and the frame is the same deep dark regardless of
+      theme by design (`--frame` never lightens — see `globals.css`), so there
+      is no separate light-mode case to check on this screen.
 
-**Done when:** all 20 current Premier League clubs have a kit and a badge, and the
-live board looks right full-screen.
+**Done when:** the live board looks right full-screen with the drawn kits. ✅
 
 ---
 
@@ -258,14 +267,25 @@ live board looks right full-screen.
       pool, and `npm run verify:scores` (22 checks against real, settled Gameweek 3)
       passed in full, covering the leaderboard after a deadline. Test pool deleted
       afterwards.
-- [ ] Deploy to Vercel with the four environment variables set — the three Supabase
-      ones plus `VOTER_SECRET`, without which nobody can be identified as themselves
-- [ ] Rotate the Supabase `service_role` key on the way out (it has been pasted into a
+- [x] Deploy to Vercel with the four environment variables set — the three Supabase
+      ones plus `VOTER_SECRET`, without which nobody can be identified as themselves.
+      Live at `fpl-xi-crowed.vercel.app`, connected to `main` so every push
+      auto-deploys.
+- [x] Rotate the Supabase `service_role` key on the way out (it has been pasted into a
       template file and a chat transcript during development). Set `VOTER_SECRET`
       explicitly first, or the rotation signs every existing viewer out of their entry.
-- [ ] Verify `.env.example` contains placeholders only before the first push
+      Done on the project's new key system (Settings → API Keys → Secret keys, not
+      the legacy JWT-based key): a new secret key replaced the old one, which was
+      then deleted rather than left live. `VOTER_SECRET` was already explicit in
+      `.env.local` beforehand, so nobody was signed out. One step was missed on the
+      first pass — Vercel's `SUPABASE_SERVICE_ROLE_KEY` still held the deleted key,
+      so the deployed site failed pool creation with "Unregistered API key" until
+      the Vercel value was updated to match and redeployed. Confirmed fixed by
+      creating a pool on the live URL; test pool deleted afterwards.
+- [x] Verify `.env.example` contains placeholders only before the first push
+      Checked: every value is a `your-...` placeholder, no real keys.
 
-**Done when:** a public URL works end to end for a real audience.
+**Done when:** a public URL works end to end for a real audience. ✅
 
 ---
 
