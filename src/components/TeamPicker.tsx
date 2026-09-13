@@ -13,7 +13,17 @@ import {
   removeFromSquad, spent, squadIds, squadChecklist, startCount, swapFormation,
   xiIds, type SlotRef, type Squad,
 } from "@/lib/squad";
+import { toSlots } from "@/lib/transfers";
 import type { Bootstrap, HostSquad, Player, PosId, Pool } from "@/lib/types";
+
+/** The team ID is the number in the URL of a manager's own FPL page. Viewers
+ *  paste the whole URL as often as they paste the number, so both work. */
+function readEntryId(input: string): number | null {
+  const digits = input.match(/\d{1,9}/g);
+  if (!digits) return null;
+  const n = Number(digits[0]);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
 
 type Menu = { pos: PosId; index: number; anchor: HTMLElement } | null;
 
@@ -79,7 +89,9 @@ export default function TeamPicker({
   const [filterPos, setFilterPos] = useState<0 | PosId>(0);
   const [filterTeam, setFilterTeam] = useState(0);
   const [sort, setSort] = useState("sel");
-  const [nick, setNick] = useState("");
+  const [entryId, setEntryId] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importErr, setImportErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   // Bumps on every successful save. A count and not a flag so a second save
@@ -101,7 +113,6 @@ export default function TeamPicker({
 
   useEffect(() => {
     try {
-      setNick(localStorage.getItem("cxi.nick") ?? "");
       const saved = localStorage.getItem(draftKey(pool.id, hosting));
       if (saved) {
         const parsed = JSON.parse(saved) as Squad;
@@ -136,6 +147,36 @@ export default function TeamPicker({
       if (next.vice && !xi.includes(next.vice)) next.vice = null;
       return next;
     });
+  }
+
+  /**
+   * A shortcut past picking fifteen players by hand: pull the viewer's own real
+   * team from the FPL API and drop it straight onto the pitch, in the same slot
+   * model the rest of the picker already works in. It replaces whatever is on
+   * the pitch rather than merging with it — a partial pick and an imported team
+   * are two different starting points, not one to be combined.
+   */
+  async function importTeam() {
+    const id = readEntryId(entryId);
+    if (!id) {
+      setImportErr("That is not an FPL team ID. Open your team on the FPL site and copy the number from the address bar.");
+      return;
+    }
+    setImporting(true);
+    setImportErr(null);
+    try {
+      const res = await fetch(`/api/fpl/entry/${id}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "That team could not be imported.");
+      setSq(toSlots(data.squad as HostSquad, byId));
+      setPicking(null);
+      setSubbing(null);
+      setMenu(null);
+    } catch (e) {
+      setImportErr(e instanceof Error ? e.message : "That team could not be imported.");
+    } finally {
+      setImporting(false);
+    }
   }
 
   /**
@@ -293,7 +334,6 @@ export default function TeamPicker({
 
     try {
       const body = {
-        nick: nick.trim() || "Anonymous",
         formation: sq.formation,
         xi: xiIds(sq),
         bench: benchIds(sq),
@@ -308,7 +348,6 @@ export default function TeamPicker({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Could not send your team.");
       try {
-        localStorage.setItem("cxi.nick", body.nick);
         localStorage.setItem(draftKey(pool.id, false), JSON.stringify(sq));
       } catch { /* storage off — the team is saved on the server either way */ }
       // Sending does not take the viewer anywhere: the squad on screen is the
@@ -409,6 +448,28 @@ export default function TeamPicker({
         <section className="mod grow">
           <h2 className="vh">{picking ? `Choose a ${POS[picking.pos]}` : "Players"}</h2>
 
+          {!hosting && !picking && (
+            <div className="field" style={{ padding: "10px 14px 0" }}>
+              <label htmlFor="entryid">Or import your FPL team</label>
+              <div className="searchhead" style={{ padding: 0 }}>
+                <input
+                  id="entryid" type="text" inputMode="numeric" value={entryId}
+                  placeholder="Your FPL team ID"
+                  disabled={locked || importing}
+                  onChange={(e) => setEntryId(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") void importTeam(); }}
+                />
+                <button
+                  className="btn btn-sm" onClick={importTeam}
+                  disabled={locked || importing}
+                >
+                  {importing ? "Importing…" : "Import"}
+                </button>
+              </div>
+              {importErr && <p className="err">{importErr}</p>}
+            </div>
+          )}
+
           <div className="searchhead">
             <input
               type="search" value={q} onChange={(e) => setQ(e.target.value)}
@@ -491,14 +552,6 @@ export default function TeamPicker({
               <p className="err">Voting is closed for this gameweek.</p>
             ) : (
               <>
-                {!hosting && (
-                  <input
-                    id="nick" type="text" value={nick} disabled={locked}
-                    aria-label="Your name on the leaderboard"
-                    onChange={(e) => setNick(e.target.value)}
-                    placeholder="Your name on the leaderboard"
-                  />
-                )}
                 <p
                   className={`todo-note${nags ? " nudge" : ""}`}
                   id="ready-list" key={nags} aria-live="polite"

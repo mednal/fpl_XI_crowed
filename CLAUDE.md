@@ -174,10 +174,9 @@ Working end to end: pool creation, picking, server-side validation, live crowd X
 realtime updates, host controls (a custom closing time and a close-now button on
 the board), and the leaderboard at `/p/[id]/scores`. Both Supabase keys are verified.
 
-**Transfer pools are built but their schema is not applied.** The code, the rules
-and the tests are in; the `pools` columns and the `transfers` table at the bottom of
-`supabase/schema.sql` still have to be run in the Supabase SQL editor. Until they
-are, *every* pool creation fails, because the insert now names `kind` and `moves`. M1 (identity, rate limiting), M2 (`squad.ts` under test,
+**Transfer pools are done.** The schema is applied and verified against the live
+project: a real FPL team was imported, voted on from several viewer identities, and
+the board updated live. M1 (identity, rate limiting), M2 (`squad.ts` under test,
 CI) and M3 (the leaderboard screen, with real auto-subs) are done. M5 has started
 ahead of the artwork: the prototype is deleted, the link has an icon and a preview
 card, `error.tsx`/`not-found.tsx` wear the board's clothes, and `npm run lint` has a

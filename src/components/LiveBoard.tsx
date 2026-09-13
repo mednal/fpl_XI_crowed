@@ -5,7 +5,7 @@ import Link from "next/link";
 import { PitchRows, type SlotView } from "./Pitch";
 import { TeamMark } from "./Kit";
 import { Countdown } from "./Countdown";
-import HostBar, { ViewerPreview } from "./HostBar";
+import HostBar from "./HostBar";
 import { poolLock } from "@/lib/lock";
 import { getBrowserClient } from "@/lib/supabase";
 import { POS, POSITIONS, crowdXI, money, pctText, ranked, tally } from "@/lib/squad";
@@ -88,9 +88,6 @@ export default function LiveBoard({
   // still taking teams, and whether there is a gameweek to score. Closing the
   // pool at half seven does not make the fixtures kick off any sooner.
   const [started, setStarted] = useState(false);
-  // The host checking what the crowd's screen looks like. Nothing about the pool
-  // changes — this browser is still the host and the server still knows it.
-  const [preview, setPreview] = useState(false);
   useEffect(() => {
     const check = () => {
       setLocked(poolLock({ deadline, closed_at: closedAt }).locked);
@@ -275,7 +272,7 @@ export default function LiveBoard({
   }
 
   return (
-    <div className={`board fixed${isHost && !preview ? " hosted" : ""}`}>
+    <div className={`board fixed${isHost ? " hosted" : ""}`}>
       <header className="strip">
         <Link className="brand" href="/">
           <span className="dot" />
@@ -295,18 +292,15 @@ export default function LiveBoard({
         <Link className="btn btn-sm" href={`/p/${pool.id}`}>My team</Link>
       </header>
 
-      {isHost && !preview && (
+      {isHost && (
         <HostBar
           poolId={pool.id}
           deadline={deadline}
           closedAt={closedAt}
           fplDeadline={gwDeadline}
           onChange={(next) => { setDeadline(next.deadline); setClosedAt(next.closed_at); }}
-          onPreview={() => setPreview(true)}
         />
       )}
-
-      {isHost && preview && <ViewerPreview onExit={() => setPreview(false)} />}
 
       <main className="frame">
         {t.n ? (

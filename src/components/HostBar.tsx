@@ -21,7 +21,6 @@ export default function HostBar({
   fplDeadline,
   moves,
   onChange,
-  onPreview,
 }: {
   poolId: string;
   deadline: string | null;
@@ -124,8 +123,14 @@ export default function HostBar({
 
   return (
     <div className="hostbar">
+      <span className={`signaldot dot-${shut ? "off" : passed ? "warn" : "live"}`} aria-hidden="true" />
       <span className="lab">Host</span>
-      <span className="state">{state}</span>
+      <span className="state">
+        {state}
+        <span className={`statuspill spill-${shut ? "off" : passed ? "warn" : "live"}`}>
+          {shut ? "Closed" : passed ? "Locked" : "Live"}
+        </span>
+      </span>
 
       <span className="lab">Closes</span>
       <DeadlineDial
@@ -157,12 +162,6 @@ export default function HostBar({
 
       <span className="spacer" />
 
-      {onPreview && (
-        <button className="btn btn-sm btn-ghost" onClick={onPreview}>
-          Preview as viewer
-        </button>
-      )}
-
       {(busy === "time" || busy === "moves") && <span className="chip">Saving…</span>}
       {note && <span className="chip good">{note}</span>}
       {error && <span className="err">{error}</span>}
@@ -173,8 +172,9 @@ export default function HostBar({
         </button>
       ) : (
         <button
-          className={`btn btn-sm${confirming ? " btn-primary" : ""}`}
+          className="btn btn-sm btn-primary"
           disabled={busy !== ""}
+          data-confirming={confirming ? "" : undefined}
           onClick={closeNow}
         >
           {busy === "close" ? "Closing…" : confirming ? "Press again to close" : "Close voting now"}

@@ -160,7 +160,7 @@ then defenders, midfielders, forwards — which is the order auto-subs come on i
 picker now lets a viewer substitute freely and reorder substitutes *within* a position,
 but not rank the three outfield substitutes against each other the way real FPL does.
 
-## M3b — Transfer pools ✅ built, schema pending
+## M3b — Transfer pools ✅ done
 
 The second question the product can ask. The host's own team goes up and the crowd
 votes on the transfers, which is the format a channel with an FPL team of its own
@@ -188,13 +188,23 @@ actually wants: their squad on screen, and the audience arguing about one swap.
       same way the XI board's is.
 - [x] 43 tests over the new rules and crowd maths, including that the browser's
       checklist and the server's validation report exactly the same failures.
-- [ ] **Run the new SQL in Supabase.** Nothing that touches the database works
-      until this is done — including creating an ordinary crowd pool, since the
-      insert now names `kind` and `moves`.
-- [ ] A real run: import a team, vote from several browsers, watch the board move.
+- [x] **Run the new SQL in Supabase.** Applied. Confirmed by creating a live
+      `crowd` pool and a live `transfer` pool through `POST /api/pools` against
+      the real project — both succeed now that `kind`/`squad`/`moves` exist.
+- [x] A real run: imported a real FPL team (entry 7837341) through
+      `GET /api/fpl/entry/[id]`, set it as a pool's squad via `PATCH`, then voted
+      a transfer from the browser (`Calvert-Lewin → Wissa`) and two more from
+      separate voter identities via the API (`Verbruggen → Steele`,
+      `Verbruggen → Forster`). `/p/[id]/live` picked up each vote in realtime —
+      coalesced, so a change can take a few seconds to appear, not instant — with
+      correct percentages, an "OUT" tally spanning both proposals against
+      Verbruggen, and the verdict staying on the first-in transfer on a three-way
+      tie, matching invariant 9. Server-side validation also rejected an
+      over-budget swap (`Verbruggen → Raya`, £0.1m over the bank) before it could
+      reach the vote, matching invariant 1. Test pools deleted afterwards.
 
 **Done when:** a host can put their real FPL team up and watch the crowd's transfers
-rank themselves live.
+rank themselves live. ✅
 
 ---
 
@@ -240,8 +250,14 @@ live board looks right full-screen.
       `fpl.ts` — the last are now named types for the slice of the FPL payload we
       read, so a field disappearing upstream is a type error rather than an
       undefined on the board.
-- [ ] Full pass on a real gameweek: create a pool, submit from several browsers, watch
-      the live screen update, check the leaderboard after the deadline
+- [x] Full pass on a real gameweek. Created a `crowd` pool for GW5 (open), picked a
+      real squad through the browser's `TeamPicker` and submitted two more entries
+      from separate voter identities; `/p/[id]/live` aggregated all three correctly —
+      formation as output, per-position tallies, and the captain/vice armband vote.
+      `/p/[id]/scores` showed the right "gameweek has not started" state for the open
+      pool, and `npm run verify:scores` (22 checks against real, settled Gameweek 3)
+      passed in full, covering the leaderboard after a deadline. Test pool deleted
+      afterwards.
 - [ ] Deploy to Vercel with the four environment variables set — the three Supabase
       ones plus `VOTER_SECRET`, without which nobody can be identified as themselves
 - [ ] Rotate the Supabase `service_role` key on the way out (it has been pasted into a

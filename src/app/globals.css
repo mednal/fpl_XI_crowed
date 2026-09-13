@@ -658,12 +658,31 @@ img.kit{object-fit:contain}
   min-width:0;
 }
 .hostbar .spacer{flex:1}
-.hostbar .state{font-weight:600; color:var(--frame-text)}
+.hostbar .state{font-weight:600; color:var(--frame-text); display:inline-flex; align-items:center; gap:8px; font-size:14px}
 .hostbar .err{color:var(--frame-hot); font-size:13px}
 .hostbar .dial{flex:0 0 auto}
 /* The bar sits between the strip and the pitch on a board that never scrolls,
    so the panel has to float clear of it rather than push the eleven down. */
 .hostbar{position:relative; z-index:20}
+
+/* The dot and pill say the same thing as the sentence beside them — open,
+   locked or closed — in a second, non-colour-only cue a host can read at a
+   glance, and the close button stays loud rather than only lighting up once
+   a press is waiting on a second one. */
+.hostbar .signaldot{width:9px; height:9px; border-radius:50%; flex:0 0 auto; background:var(--frame-text-3)}
+.hostbar .signaldot.dot-live{background:var(--hot); animation:hostsignal 1.66s var(--ease) infinite}
+.hostbar .signaldot.dot-warn{background:var(--frame-gold)}
+.hostbar .statuspill{
+  display:inline-flex; padding:2px 8px; border-radius:99px;
+  font:600 11px/1 "Barlow Condensed",sans-serif; letter-spacing:.1em; text-transform:uppercase;
+}
+.hostbar .statuspill.spill-live{background:var(--hot); color:#fff}
+.hostbar .statuspill.spill-warn{background:var(--frame-gold); color:var(--frame)}
+.hostbar .statuspill.spill-off{background:rgba(255,255,255,.1); color:var(--frame-text-2)}
+.hostbar .btn-primary{box-shadow:0 0 8px rgba(229,24,95,.32)}
+.hostbar .btn-primary[data-confirming]{animation:hostconfirm 1s var(--ease) infinite}
+@keyframes hostsignal{0%,100%{box-shadow:0 0 0 0 rgba(229,24,95,.55)} 50%{box-shadow:0 0 0 6px rgba(229,24,95,0)}}
+@keyframes hostconfirm{0%,100%{transform:scale(1)} 50%{transform:scale(1.035)}}
 
 /* The viewer preview's way back. Floating, and deliberately the one loud thing
    on an otherwise ordinary viewer's board: the host is in a mode, and a mode
