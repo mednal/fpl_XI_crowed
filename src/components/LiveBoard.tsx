@@ -1,17 +1,30 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { PitchRows, type SlotView } from "./Pitch";
 import { TeamMark } from "./Kit";
 import { Countdown } from "./Countdown";
 import HostBar from "./HostBar";
+import SlotMenu, { MenuButton } from "./SlotMenu";
 import { poolLock } from "@/lib/lock";
 import { getBrowserClient } from "@/lib/supabase";
-import { POS, POSITIONS, crowdXI, money, pctText, ranked, tally } from "@/lib/squad";
-import type { Bootstrap, Entry, Pool, Ranked, Team } from "@/lib/types";
+import { POS, POSITIONS, XI_MAX, XI_MIN, crowdXI, money, pctText, ranked, tally } from "@/lib/squad";
+import type { Bootstrap, Entry, Player, Pool, PosId, Ranked, Team } from "@/lib/types";
 
 type Row = Pick<Entry, "id" | "nick" | "xi" | "bench" | "captain" | "vice" | "updated_at">;
+
+/** The host's own eleven. A list rather than position slots, because a
+ *  substitution across positions moves the shape, the way it does in FPL. */
+type HostXI = { xi: number[]; captain: number | null; vice: number | null };
+
+/** Half a substitution: a starter (or an empty slot) waiting for who comes on,
+ *  or an "also picked" name waiting for who he replaces. */
+type Subbing =
+  | { side: "out"; id: number; slot?: undefined }
+  | { side: "out"; id: null; slot: string }
+  | { side: "in"; id: number }
+  | null;
 
 /** How long a crossing stays lit on the pitch and in the rail. */
 const CROSS_MS = 1400;
@@ -160,16 +173,6 @@ export default function LiveBoard({
   const t = useMemo(() => tally(entries as never), [entries]);
   const cx = useMemo(() => crowdXI(t, byId, pool.formation), [t, byId, pool.formation]);
 
-  // A club filling half the XI is the crowd showing its hand, not a rule being
-  // broken — the crowd XI is a hall of fame, so it has no club cap to break.
-  const stacked = useMemo(
-    () => Object.entries(cx.clubs)
-      .map(([team, n]) => [Number(team), n] as const)
-      .filter(([, n]) => n >= 4)
-      .sort((a, b) => b[1] - a[1]),
-    [cx.clubs],
-  );
-
   /**
    * The whole point of the board: a player crossing into the XI is the moment
    * worth watching. Diffing the previous XI against the current one is what
@@ -225,6 +228,185 @@ export default function LiveBoard({
     return all.slice(inCount, inCount + ALSO_PER_POS).map((r) => ({ r, k }));
   }).sort((a, b) => b.r.pct - a.r.pct), [t, cx, byId]);
 
+  /**
+   * The host's own take, tried on their screen only — the same idea as a
+   * transfer board's trial swaps (invariant 10), applied to a crowd pool.
+   * Never written anywhere and never shown to a viewer: swapping a
+   * crowd-voted starter for one of the "also picked" names would otherwise
+   * put a team nobody voted for on the same pitch the crowd's XI stands on,
+   * which is exactly what invariant 4 rules out. So it lives entirely in
+   * this component's state, clearly labelled as the host's own view, and it
+   * can only ever promote a player the crowd actually picked — never invent
+   * one from outside the vote.
+   *
+   * It works like FPL's own pick-team screen: tap a shirt for the armband or
+   * a substitution, and the "also picked" list is the bench.
+   */
+  const [hostMode, setHostMode] = useState(false);
+  const [mine, setMine] = useState<HostXI | null>(null);
+  const [subbing, setSubbing] = useState<Subbing>(null);
+  const [menu, setMenu] = useState<{ id: number; anchor: HTMLElement } | null>(null);
+  const [landed, setLanded] = useState<number | null>(null);
+  const shutMenu = useCallback(() => setMenu(null), []);
+
+  function crowdTeam(): HostXI {
+    const xi = POSITIONS.flatMap((k) => (cx.rows[k] ?? []).map((r) => r.id));
+    // An armband has to sit on the pitch, and the crowd's favourite captain can
+    // be a player who did not make its XI — so each goes to the best-backed
+    // starter. The two tallies are separate, so the vice skips the captain.
+    const onPitch = new Set(xi);
+    const captain = ranked(t.captain, t.n, byId).find((r) => onPitch.has(r.id))?.id ?? null;
+    const vice = ranked(t.vice, t.n, byId).find((r) => onPitch.has(r.id) && r.id !== captain)?.id ?? null;
+    return { xi, captain, vice };
+  }
+  function openHostView() { setMine(crowdTeam()); setSubbing(null); setMenu(null); setHostMode(true); }
+  function resetHostView() { setMine(crowdTeam()); setSubbing(null); setMenu(null); }
+  function closeHostView() { setHostMode(false); setSubbing(null); setMenu(null); }
+
+  function substitute(out: number | null, inId: number) {
+    setMine((prev) => {
+      if (!prev || !fitsXI(prev.xi, out, inId, byId)) return prev;
+      const samePos = out != null && byId.get(out)?.pos === byId.get(inId)?.pos;
+      // Like for like keeps his place in the row; otherwise the row he joins
+      // grows and the one he left shrinks, which is the shape changing.
+      const xi = samePos
+        ? prev.xi.map((id) => (id === out ? inId : id))
+        : [...prev.xi.filter((id) => id !== out), inId];
+      // The armband goes with the shirt, as FPL does it, so the pitch is never
+      // left without a captain.
+      const captain = out != null && prev.captain === out ? inId : prev.captain;
+      const vice = out != null && prev.vice === out ? inId : prev.vice;
+      return { xi, captain, vice: vice === captain ? null : vice };
+    });
+    setSubbing(null);
+    setLanded(inId);
+  }
+
+  function setArmband(id: number, which: "captain" | "vice") {
+    setMine((prev) => prev && ({
+      ...prev,
+      // The two cannot be the same player, so taking one hands back the other.
+      captain: which === "captain" ? id : prev.captain === id ? null : prev.captain,
+      vice: which === "vice" ? id : prev.vice === id ? null : prev.vice,
+    }));
+    setMenu(null);
+  }
+
+  useEffect(() => {
+    if (landed == null) return;
+    const timer = setTimeout(() => setLanded(null), CROSS_MS);
+    return () => clearTimeout(timer);
+  }, [landed]);
+
+  useEffect(() => {
+    if (!subbing) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setSubbing(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [subbing]);
+
+  const xiPct = (id: number) => (t.n ? ((t.xi[id] ?? 0) * 100) / t.n : 0);
+
+  let hostRows: SlotView[][] | null = null;
+  if (hostMode && mine) {
+    const cells: Record<PosId, SlotView[]> = { 1: [], 2: [], 3: [], 4: [] };
+    for (const id of mine.xi) {
+      const player = byId.get(id);
+      if (!player) continue;
+      const k = player.pos;
+      let className: string | undefined;
+      let onClick: SlotView["onClick"];
+      let title = `${player.n} — tap for the armband or a substitution`;
+      if (subbing?.side === "out") {
+        className = subbing.id === id ? "chosen" : "dim";
+        if (subbing.id === id) { onClick = () => setSubbing(null); title = "Tap again to cancel the substitution"; }
+      } else if (subbing?.side === "in") {
+        const ok = fitsXI(mine.xi, id, subbing.id, byId);
+        className = ok ? "target" : "dim";
+        title = ok ? `Take ${player.n} off` : "This swap would not leave a legal formation";
+        if (ok) onClick = () => substitute(id, subbing.id);
+      } else {
+        className = landed === id ? "arriving" : undefined;
+        onClick = (e) => setMenu({ id, anchor: e.currentTarget });
+      }
+      cells[k].push({
+        player,
+        pos: k,
+        sub: pctText(xiPct(id)),
+        subClass: "hostpick",
+        badge: mine.captain === id ? "C" : mine.vice === id ? "V" : null,
+        className,
+        title,
+        onClick,
+      });
+    }
+
+    // Early on the crowd may not have filled every slot yet. The gaps come
+    // back as empty shirts the host can fill, legal minimum first.
+    let room = 11 - mine.xi.length;
+    const pad = (k: PosId, upTo: number) => {
+      while (room > 0 && cells[k].length < upTo) {
+        const slot = `${k}:${cells[k].length}`;
+        const view: SlotView = { player: null, pos: k, sub: "empty", title: "Tap to fill this slot from the list" };
+        if (subbing?.side === "out") {
+          view.className = subbing.slot === slot ? "chosen" : "dim";
+          if (subbing.slot === slot) view.onClick = () => setSubbing(null);
+        } else if (subbing?.side === "in") {
+          const ok = fitsXI(mine.xi, null, subbing.id, byId);
+          view.className = ok ? "target" : "dim";
+          if (ok) view.onClick = () => substitute(null, subbing.id);
+        } else {
+          view.onClick = () => setSubbing({ side: "out", id: null, slot });
+        }
+        cells[k].push(view);
+        room--;
+      }
+    };
+    for (const k of POSITIONS) pad(k, XI_MIN[k]);
+    for (const k of POSITIONS) pad(k, cx.shape[k]);
+    hostRows = POSITIONS.map((k) => cells[k]);
+  }
+
+  // The bench, in FPL's terms: everyone the crowd picked who is not on the
+  // host's pitch. A player subbed off comes back here, and one brought on
+  // leaves it — always real votes, never a name from outside them.
+  const hostAlso = useMemo(() => {
+    if (!hostMode || !mine) return [];
+    const placed = new Set(mine.xi);
+    return POSITIONS.flatMap((k) => ranked(t.xi, t.n, byId, k)
+      .filter((r) => !placed.has(r.id))
+      .slice(0, ALSO_PER_POS)
+      .map((r) => ({ r, k })))
+      .sort((a, b) => b.r.pct - a.r.pct);
+  }, [hostMode, mine, t, byId]);
+
+  const crowdNow = hostMode ? crowdTeam() : null;
+  const hostChanged = Boolean(mine && crowdNow && (
+    [...mine.xi].sort().join() !== [...crowdNow.xi].sort().join()
+    || mine.captain !== crowdNow.captain
+    || mine.vice !== crowdNow.vice
+  ));
+
+  const hostPlayers = hostMode && mine
+    ? mine.xi.map((id) => byId.get(id)).filter((p): p is Player => Boolean(p))
+    : null;
+  const hostCaptain = mine?.captain != null && mine.xi.includes(mine.captain) ? byId.get(mine.captain) : undefined;
+
+  // A club filling half the XI is the crowd showing its hand, not a rule being
+  // broken — the crowd XI is a hall of fame, so it has no club cap to break.
+  let clubs: Record<number, number> = cx.clubs;
+  if (hostPlayers) {
+    clubs = {};
+    for (const p of hostPlayers) clubs[p.team] = (clubs[p.team] ?? 0) + 1;
+  }
+  const stacked = Object.entries(clubs)
+    .map(([team, n]) => [Number(team), n] as const)
+    .filter(([, n]) => n >= 4)
+    .sort((a, b) => b[1] - a[1]);
+
+  const shownAlso = hostMode ? hostAlso : also;
+  const menuPlayer = menu ? byId.get(menu.id) : undefined;
+
   const capBoard = ranked(t.captain, t.n, byId).slice(0, CAP_ROWS);
   // The vice race is the rest of the armband story, and the only one that
   // matters if the captain does not play. A crowd that agrees on a captain
@@ -233,13 +415,6 @@ export default function LiveBoard({
     .filter((r) => r.id !== cx.captain?.id)
     .slice(0, 3);
   const unanimous = capBoard.length === 1 && t.n > 1;
-
-  const recent = useMemo(
-    () => [...entries]
-      .sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? ""))
-      .slice(0, 6),
-    [entries],
-  );
 
   /**
    * `navigator.clipboard` only exists on a secure origin, and a host running the
@@ -273,21 +448,38 @@ export default function LiveBoard({
 
   return (
     <div className={`board fixed${isHost ? " hosted" : ""}`}>
-      <header className="strip">
-        <Link className="brand" href="/">
+      <header className="strip titled">
+        <Link className="brand" href="/" aria-label="Crowd XI">
           <span className="dot" />
-          Crowd XI
         </Link>
         <span className="sep" />
+        <span className="poolname">{pool.name}</span>
         <span className="chip live">Live</span>
-        <span className="chip name">{pool.name}</span>
         <span className="spacer" />
-        {deadline && <Countdown deadline={deadline} closed={Boolean(closedAt)} />}
+        {deadline && <span className="clock"><Countdown deadline={deadline} closed={Boolean(closedAt)} /></span>}
         <span className="sep" />
         <span className="meter">
           <span className="lab">Teams in</span>
           <b className="num">{t.n}</b>
         </span>
+        {isHost && t.n > 0 && (
+          hostMode ? (
+            <>
+              <span className="chip warn">Your view</span>
+              <button
+                className="btn btn-sm"
+                onClick={resetHostView}
+                disabled={!hostChanged}
+                title={hostChanged ? "Put back the crowd's eleven and armbands as they stand now" : "Your XI is the crowd's XI"}
+              >
+                Reset to the crowd&apos;s XI
+              </button>
+              <button className="btn btn-sm btn-primary" onClick={closeHostView}>Done</button>
+            </>
+          ) : (
+            <button className="btn btn-sm" onClick={openHostView}>Manage the XI</button>
+          )
+        )}
         {started && <Link className="btn btn-sm" href={`/p/${pool.id}/scores`}>Scores</Link>}
         <Link className="btn btn-sm" href={`/p/${pool.id}`}>My team</Link>
       </header>
@@ -303,8 +495,22 @@ export default function LiveBoard({
       )}
 
       <main className="frame">
+        {hostRows && subbing && (
+          <div className="subbar">
+            <span>
+              {subbing.side === "in" ? (
+                <>Tap the player <b>{byId.get(subbing.id)?.n}</b> replaces — the shape follows.</>
+              ) : subbing.id != null ? (
+                <>Pick who comes on for <b>{byId.get(subbing.id)?.n}</b> from the list on the right.</>
+              ) : (
+                <>Pick who fills the empty slot from the list on the right.</>
+              )}
+            </span>
+            <button className="btn btn-sm" onClick={() => setSubbing(null)}>Cancel</button>
+          </div>
+        )}
         {t.n ? (
-          <PitchRows rows={rows} teams={teams} />
+          <PitchRows rows={hostRows ?? rows} teams={teams} />
         ) : (
           <div className="pitch">
             <p className="empty-note" style={{ color: "var(--frame-text-2)", maxWidth: "34ch", margin: "0 auto" }}>
@@ -317,20 +523,28 @@ export default function LiveBoard({
       <div className="foot">
         <dl>
           <dt className="lab">Shape</dt>
-          <dd>{t.n || pool.formation ? cx.formation : "—"}</dd>
+          <dd>
+            {hostPlayers
+              ? [2, 3, 4].map((k) => hostPlayers.filter((p) => p.pos === k).length).join("-")
+              : t.n || pool.formation ? cx.formation : "—"}
+          </dd>
         </dl>
-        {pool.formation && <span className="chip">Set by the host</span>}
+        {pool.formation && !hostPlayers && <span className="chip">Set by the host</span>}
         <span className="sep" />
         <dl>
           <dt className="lab">Armband</dt>
           <dd className="sm">
-            {cx.captain ? `${cx.captain.player.n} · ${pctText(cx.captain.pct)}` : "—"}
+            {hostPlayers
+              ? hostCaptain?.n ?? "—"
+              : cx.captain ? `${cx.captain.player.n} · ${pctText(cx.captain.pct)}` : "—"}
           </dd>
         </dl>
         <span className="sep" />
         <dl>
           <dt className="lab">XI value</dt>
-          <dd className="sm num">{money(cx.cost)}</dd>
+          <dd className="sm num">
+            {money(hostPlayers ? hostPlayers.reduce((s, p) => s + p.cost, 0) : cx.cost)}
+          </dd>
         </dl>
         <span className="spacer" />
         {stacked.length > 0 && (
@@ -341,16 +555,6 @@ export default function LiveBoard({
       </div>
 
       <aside className="churn still">
-        <section className="mod arrivemod">
-          <h2>Arriving now</h2>
-          <div className="countline">
-            <span className="big">{t.n}</span>
-            <span className="who">
-              {recent.length ? `latest ${recent[0].nick || "Anonymous"}` : "no teams in yet"}
-            </span>
-          </div>
-        </section>
-
         <section className="mod armbandmod">
           <h2>
             Armband vote
@@ -400,33 +604,82 @@ export default function LiveBoard({
             Also picked
             <span className="spacer" />
             <span className="hint" style={{ letterSpacing: 0, textTransform: "none" }}>
-              {`${also.length} outside the eleven`}
+              {!hostMode
+                ? `${also.length} outside the eleven`
+                : subbing?.side === "out"
+                  ? "tap who comes on"
+                  : "tap a name to bring him on"}
             </span>
           </h2>
-          {also.length ? (
-            <ul className="votelist">
-              {[...POSITIONS].reverse().flatMap((k) => {
-                const g = also.filter((x) => x.k === k);
-                if (!g.length) return [];
-                return [
-                  <li className="votehead" key={`h${k}`}>
-                    <span className="lab">{POS[k]}</span>
-                    <span className="cnt num">{g.length}</span>
-                  </li>,
-                  ...g.map(({ r }) => (
-                    <li className="voterow" key={r.id} title={`${r.player.n} — picked in ${r.count} of ${t.n} starting XIs`}>
-                      <i style={{ transform: `scaleX(${Math.max(0.015, r.pct / 100)})` }} />
-                      <span className="nm">{r.player.n}</span>
-                      <span className="tm"><TeamMark team={teams.get(r.player.team)} /></span>
-                      <span className="pc num">{pctText(r.pct)}</span>
-                    </li>
-                  )),
-                ];
+          {shownAlso.length ? (
+            <div className="posgroups">
+              {[...POSITIONS].reverse().map((k) => {
+                const g = shownAlso.filter((x) => x.k === k);
+                if (!g.length) return null;
+                return (
+                  <div className="pgroup" key={k}>
+                    <div className="pgut">
+                      <span className="lab">{POS[k]}</span>
+                      <span className="cnt num">{g.length}</span>
+                    </div>
+                    <ul className="prows">
+                      {g.map(({ r }) => {
+                        const body = (
+                          <>
+                            <i style={{ transform: `scaleX(${Math.max(0.015, r.pct / 100)})` }} />
+                            <span className="nm">{r.player.n}</span>
+                            <span className="tm"><TeamMark team={teams.get(r.player.team)} /></span>
+                            <span className="pc num">{pctText(r.pct)}</span>
+                          </>
+                        );
+                        if (!hostMode || !mine) {
+                          return (
+                            <li className="voterow" key={r.id} title={`${r.player.n} — picked in ${r.count} of ${t.n} starting XIs`}>
+                              {body}
+                            </li>
+                          );
+                        }
+                        // On the host's view this list is the bench: a name is a
+                        // button, and mid-substitution only a legal partner answers.
+                        let state = "";
+                        let title = `Bring ${r.player.n} on — then tap who he replaces`;
+                        let onClick: (() => void) | undefined = () => setSubbing({ side: "in", id: r.id });
+                        if (subbing?.side === "out") {
+                          const ok = fitsXI(mine.xi, subbing.id, r.id, byId);
+                          state = ok ? " target" : "";
+                          title = ok
+                            ? `Bring ${r.player.n} on`
+                            : "He would not leave a legal formation";
+                          onClick = ok ? () => substitute(subbing.id, r.id) : undefined;
+                        } else if (subbing?.side === "in" && subbing.id === r.id) {
+                          state = " chosen";
+                          title = "Tap again to cancel the substitution";
+                          onClick = () => setSubbing(null);
+                        }
+                        return (
+                          <li key={r.id}>
+                            <button
+                              type="button"
+                              className={`voterow pick${state}`}
+                              title={title}
+                              disabled={!onClick}
+                              onClick={onClick}
+                            >
+                              {body}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                );
               })}
-            </ul>
+            </div>
           ) : (
             <p className="empty-note">
-              Everyone picked so far is already in the eleven.
+              {hostMode
+                ? "Everyone the crowd picked is already on your pitch."
+                : "Everyone picked so far is already in the eleven."}
             </p>
           )}
         </section>
@@ -463,8 +716,52 @@ export default function LiveBoard({
           </div>
         </section>
       </aside>
+
+      {hostMode && mine && menu && menuPlayer && !subbing && (
+        <SlotMenu anchor={menu.anchor} onClose={shutMenu}>
+          <div className="slotmenu-head">
+            <b>{menuPlayer.n}</b>
+            <div className="hint">
+              {teams.get(menuPlayer.team)?.name} · in {pctText(xiPct(menuPlayer.id))} of XIs
+            </div>
+          </div>
+          {mine.captain !== menuPlayer.id && (
+            <MenuButton onClick={() => setArmband(menuPlayer.id, "captain")}>Make captain</MenuButton>
+          )}
+          {mine.vice !== menuPlayer.id && (
+            <MenuButton onClick={() => setArmband(menuPlayer.id, "vice")}>Make vice-captain</MenuButton>
+          )}
+          <MenuButton onClick={() => { setSubbing({ side: "out", id: menuPlayer.id }); setMenu(null); }}>
+            Substitute
+          </MenuButton>
+        </SlotMenu>
+      )}
     </div>
   );
+}
+
+/**
+ * Whether taking `out` off (or nobody, to fill a gap) and bringing `inId` on
+ * still leaves an eleven that is, or can still become, a legal formation. The
+ * limits are FPL's, the same ones a viewer's XI is held to.
+ */
+function fitsXI(xi: number[], out: number | null, inId: number, byId: Map<number, Player>): boolean {
+  const c: Record<PosId, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
+  for (const id of xi) {
+    const k = id === out ? undefined : byId.get(id)?.pos;
+    if (k) c[k]++;
+  }
+  const k = byId.get(inId)?.pos;
+  if (!k) return false;
+  c[k]++;
+  let total = 0;
+  let short = 0;
+  for (const p of POSITIONS) {
+    if (c[p] > XI_MAX[p]) return false;
+    total += c[p];
+    short += Math.max(0, XI_MIN[p] - c[p]);
+  }
+  return total + short <= 11;
 }
 
 /** `slim` keeps the row to one line and moves its support bar onto the row's

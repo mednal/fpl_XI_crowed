@@ -15,7 +15,7 @@ import type { Bootstrap, HostSquad, Player, PosId, Pool } from "@/lib/types";
 /** One player leaving, and whoever the viewer has chosen to replace them. */
 type Swap = { out: number; in: number | null };
 
-const LIST_CAP = 200;
+const LIST_CAP = 2000;
 
 const SORTS: [string, string][] = [
   ["sel", "Sort: selected %"],

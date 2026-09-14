@@ -44,7 +44,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap"
         />
       </head>
-      <body>{children}</body>
+      <body>{children}{/* impeccable-live-start */}
+<script src="http://localhost:8400/live.js?token=a7905e68-bdb5-477a-b923-ea258db70c43"></script>
+{/* impeccable-live-end */}
+</body>
     </html>
   );
 }

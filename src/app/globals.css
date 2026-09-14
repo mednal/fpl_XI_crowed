@@ -190,6 +190,13 @@ input::placeholder{color:var(--text-3)}
   grid-template-rows:var(--strip) auto minmax(0,1fr) auto;
   grid-template-areas:"head head" "host host" "frame churn" "foot churn";
 }
+/* On a watched board the rail runs the full height and the strip gives up the
+   width above it. The strip's controls fit in the frame's width; the rail's vote
+   list never had the height it needed. */
+@media (min-width:1001px){
+  .board.fixed{grid-template-areas:"head churn" "frame churn" "foot churn"}
+  .board.fixed.hosted{grid-template-areas:"head churn" "host churn" "frame churn" "foot churn"}
+}
 
 .strip{
   grid-area:head; display:flex; align-items:center; gap:12px; padding:0 16px;
@@ -215,6 +222,26 @@ input::placeholder{color:var(--text-3)}
   box-shadow:0 0 0 3px rgba(229,24,95,.25);
 }
 .brandlogo{height:24px; width:auto; max-width:120px; object-fit:contain; display:block; border-radius:3px}
+
+/* The results board's strip: the pool's name is the headline, and the brand
+   steps back to its mark — the stream already knows whose product it is. Live
+   and the clock read as ink rather than capsules, so the only boxes left in the
+   strip are the ones a host can press. */
+.strip.titled .brand .dot{width:9px; height:9px; box-shadow:none}
+.strip.titled .poolname{
+  display:block; min-width:0; flex:0 1 auto; max-width:min(42vw,460px);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  font:400 21px/1 "Anton",sans-serif; letter-spacing:.01em; text-transform:uppercase;
+  color:var(--frame-text);
+}
+.strip.titled .chip.live{background:transparent; border-color:transparent; padding:0; font-size:12px; color:var(--frame-hot)}
+.strip.titled .chip.live::before{background:var(--hot)}
+.strip.titled .clock{display:inline-flex; flex:0 0 auto}
+.strip.titled .clock .chip{
+  background:transparent; border-color:transparent; padding:0;
+  font-size:14px; letter-spacing:.1em; color:var(--frame-text-2);
+}
+.strip.titled .clock .chip.warn{color:var(--frame-gold)}
 
 /* A number the host reads out loud. */
 .meter{display:flex; align-items:baseline; gap:7px; flex:0 0 auto}
@@ -331,6 +358,9 @@ input::placeholder{color:var(--text-3)}
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums;
 }
 .plate .sub.pct{background:var(--hot); color:#fff}
+/* The host's own view, not a vote result — a different colour from .pct so
+   the two are never mistaken for each other at a glance. */
+.plate .sub.hostpick{background:var(--gold); color:#241800}
 .slot.empty .plate .nm{color:var(--frame-text-3)}
 
 /* The signature: a player crossing the cut arrives on the pitch. */
@@ -479,25 +509,34 @@ img.kit{object-fit:contain}
 .churn.still .alsomod{flex:1 1 auto; min-height:0; display:flex; flex-direction:column}
 .churn.still .alsomod > h2{flex:0 0 auto}
 
-/* Every player the crowd picked who did not make the pitch, grouped by
-   position from forwards down to the goalkeeper. The position heading sticks
-   to the top of the list while its own players scroll under it, so the block
-   you are reading always says which position it is. */
 .votelist{
   list-style:none; margin:0; padding:0 0 6px;
   flex:1 1 auto; min-height:0; overflow-y:auto;
   overscroll-behavior:contain; scrollbar-width:thin;
 }
-.votehead{
-  position:sticky; top:0; z-index:1; display:flex; align-items:baseline; gap:7px;
-  padding:5px 15px 3px; background:var(--frame-2);
-  border-bottom:1px solid var(--frame-line);
+
+/* Every player the crowd picked who did not make the pitch, grouped by
+   position from forwards down to the goalkeeper. The position sits in a column
+   of its own beside its players rather than as a heading row above them: four
+   heading rows cost the list four players' worth of height, and the label
+   still sticks while its own players scroll past it. */
+.posgroups{
+  flex:1 1 auto; min-height:0; overflow-y:auto; padding-bottom:6px;
+  overscroll-behavior:contain; scrollbar-width:thin;
 }
-.votehead .lab{
-  font-family:"Barlow Condensed",sans-serif; font-size:11.5px; font-weight:600;
-  letter-spacing:.16em; text-transform:uppercase; color:var(--frame-text-2);
+.pgroup{display:grid; grid-template-columns:52px minmax(0,1fr); border-top:1px solid var(--frame-line)}
+.pgroup:first-child{border-top:0}
+.pgut{
+  position:sticky; top:0; align-self:start;
+  display:flex; flex-direction:column; gap:3px; padding:10px 0 8px 15px;
 }
-.votehead .cnt{font-family:"Anton",sans-serif; font-size:11.5px; color:var(--frame-text-3)}
+.pgut .lab{
+  font-family:"Barlow Condensed",sans-serif; font-size:13px; font-weight:600;
+  letter-spacing:.14em; text-transform:uppercase; color:var(--frame-text);
+}
+.pgut .cnt{font-family:"Anton",sans-serif; font-size:13px; line-height:1; color:var(--frame-text-3)}
+.prows{list-style:none; margin:0; padding:2px 0 4px}
+
 .voterow{
   position:relative; display:flex; align-items:baseline;
   gap:8px; padding:3px 15px 4px; min-width:0;
@@ -523,6 +562,29 @@ img.kit{object-fit:contain}
   flex:0 0 auto; min-width:46px; text-align:right; font-family:"Anton",sans-serif;
   font-size:14px; font-variant-numeric:tabular-nums; color:var(--frame-text);
 }
+/* On the host's own view the list is the bench, so each name is a button —
+   dressed as the row it replaces, with the pitch's chosen/target rings. */
+button.voterow{
+  width:100%; margin:0; border:0; background:none; color:inherit; font:inherit;
+  text-align:left; cursor:pointer; box-shadow:inset 3px 0 0 transparent;
+}
+button.voterow:hover:not(:disabled){background:var(--frame-line)}
+button.voterow:disabled{opacity:.35; cursor:default}
+button.voterow.target{box-shadow:inset 3px 0 0 var(--mint)}
+button.voterow.chosen{box-shadow:inset 3px 0 0 var(--gold); background:var(--frame-line)}
+button.voterow:focus-visible{outline:2px solid var(--frame-gold); outline-offset:-2px}
+/* The live board's list is read off a stream, so its rows are the rail's
+   reading size, and the bar gets a track: a 2px sliver on its own was a line
+   under some names and nothing under others. */
+.prows .voterow{padding:6px 15px 9px 4px; gap:10px}
+.prows .voterow::before{
+  content:""; position:absolute; left:4px; right:15px; bottom:0; height:3px;
+  background:var(--frame-line);
+}
+.prows .voterow > i{left:4px; height:3px; opacity:1}
+.prows .voterow .nm{font-size:15px; line-height:1.35}
+.prows .voterow .tm{font-size:12.5px}
+.prows .voterow .pc{font-size:16px; min-width:50px}
 .churn.still .sharemod, .churn.still .votemod{flex:0 0 auto}
 /* The door back to the voting page. A button the width of the rail, so it
    reads as a way out of the board rather than another statistic. */
@@ -579,11 +641,12 @@ img.kit{object-fit:contain}
   .churn.still .armbandmod .rank .bar > i{opacity:.55}
 }
 
-/* Last resort. Under about 640px the rail cannot hold a field as well as a
-   list, and the list is the module the host operates rather than watches. The
-   tail goes; the race and the vice stay, which is what the module is for. */
-@media (min-width:1001px) and (max-height:639px){
-  .churn.still .rank.slim{display:none}
+/* Short of a full 1080 frame the rail cannot hold a field as well as a
+   readable list, and the list is the module the host operates rather than
+   watches. The tail goes; the race and the vice stay, which is what the module
+   is for. */
+@media (min-width:1001px) and (max-height:900px){
+  .churn.still .armbandmod .rank.slim{display:none}
 }
 
 /* The arrivals module, reduced to the one number a host reads out and the one
@@ -653,35 +716,46 @@ img.kit{object-fit:contain}
    only loud thing here should be the pitch. */
 .hostbar{
   grid-area:host; display:flex; align-items:center; gap:10px; flex-wrap:wrap;
-  font-size:13.5px; padding:7px 16px; background:var(--frame-2);
+  font-size:13.5px; padding:4px 16px; min-height:40px; background:var(--frame-2);
   color:var(--frame-text-2); border-bottom:1px solid var(--frame-line);
   min-width:0;
 }
 .hostbar .spacer{flex:1}
-.hostbar .state{font-weight:600; color:var(--frame-text); display:inline-flex; align-items:center; gap:8px; font-size:14px}
 .hostbar .err{color:var(--frame-hot); font-size:13px}
 .hostbar .dial{flex:0 0 auto}
+.hostbar .dialtrig{padding:3px 9px}
+.hostbar .dialtrig .num{font-size:17px}
 /* The bar sits between the strip and the pitch on a board that never scrolls,
    so the panel has to float clear of it rather than push the eleven down. */
 .hostbar{position:relative; z-index:20}
 
-/* The dot and pill say the same thing as the sentence beside them — open,
-   locked or closed — in a second, non-colour-only cue a host can read at a
-   glance, and the close button stays loud rather than only lighting up once
-   a press is waiting on a second one. */
-.hostbar .signaldot{width:9px; height:9px; border-radius:50%; flex:0 0 auto; background:var(--frame-text-3)}
-.hostbar .signaldot.dot-live{background:var(--hot); animation:hostsignal 1.66s var(--ease) infinite}
-.hostbar .signaldot.dot-warn{background:var(--frame-gold)}
-.hostbar .statuspill{
-  display:inline-flex; padding:2px 8px; border-radius:99px;
-  font:600 11px/1 "Barlow Condensed",sans-serif; letter-spacing:.1em; text-transform:uppercase;
+/* One line in the strip's label voice. The state is said once, as a word, and
+   its mark changes shape as well as colour — dot, diamond, ring — so open,
+   locked and closed survive a greyscale or colour-blind read. The sentence is
+   kept for screen readers only. */
+.hostbar .hb-slash{
+  font:600 12px/1 "Barlow Condensed",sans-serif; letter-spacing:.16em; color:var(--frame-text-3);
 }
-.hostbar .statuspill.spill-live{background:var(--hot); color:#fff}
-.hostbar .statuspill.spill-warn{background:var(--frame-gold); color:var(--frame)}
-.hostbar .statuspill.spill-off{background:rgba(255,255,255,.1); color:var(--frame-text-2)}
-.hostbar .btn-primary{box-shadow:0 0 8px rgba(229,24,95,.32)}
+.hostbar .hb-mark{
+  display:inline-flex; align-items:center; gap:7px;
+  font:600 14px/1 "Barlow Condensed",sans-serif; letter-spacing:.12em;
+  text-transform:uppercase; color:var(--frame-text);
+}
+.hostbar .hb-mark > i{width:8px; height:8px; flex:0 0 auto; border-radius:50%}
+.hostbar .hb-mark.tone-live > i{background:var(--hot)}
+.hostbar .hb-mark.tone-warn{color:var(--frame-gold)}
+.hostbar .hb-mark.tone-warn > i{background:var(--frame-gold); border-radius:1px; transform:rotate(45deg) scale(.85)}
+.hostbar .hb-mark.tone-off{color:var(--frame-text-2)}
+.hostbar .hb-mark.tone-off > i{box-shadow:inset 0 0 0 1.5px var(--frame-text-3)}
+.hostbar .hb-sr{
+  position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap;
+}
+/* Loud without a halo, and its hover stays on the frame's palette: the page's
+   hover ink is near the bar's own ground and would make the button vanish. */
+.hostbar .btn-primary:hover:not(:disabled){
+  background:var(--frame-hot); border-color:var(--frame-hot); color:var(--frame);
+}
 .hostbar .btn-primary[data-confirming]{animation:hostconfirm 1s var(--ease) infinite}
-@keyframes hostsignal{0%,100%{box-shadow:0 0 0 0 rgba(229,24,95,.55)} 50%{box-shadow:0 0 0 6px rgba(229,24,95,0)}}
 @keyframes hostconfirm{0%,100%{transform:scale(1)} 50%{transform:scale(1.035)}}
 
 /* The viewer preview's way back. Floating, and deliberately the one loud thing
@@ -977,7 +1051,7 @@ img.kit{object-fit:contain}
    to the right of a row would open off the screen. So the dial takes a row of
    its own and the panel simply matches it. */
 @media (max-width:620px){
-  .hostbar > .spacer{display:none}
+  .hostbar > .spacer, .hostbar .hb-slash{display:none}
   .hostbar .dial{flex:1 1 100%}
   .hostbar .dialtrig{width:100%}
   .hostbar .dialtrig .spacer{flex:1}
@@ -1379,7 +1453,7 @@ html{scroll-behavior:smooth}
 @media (max-width:620px){
   /* The pool name is the first thing to go when the strip runs out of room, and
      what is left wraps rather than losing the navigation off the right edge. */
-  .strip .chip.name{display:none}
+  .strip .chip.name, .strip.titled .poolname{display:none}
   .strip{
     flex-wrap:wrap; overflow:visible; height:auto; min-height:var(--strip);
     padding-top:9px; padding-bottom:9px; gap:9px;

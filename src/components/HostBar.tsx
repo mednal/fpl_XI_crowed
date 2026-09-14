@@ -123,14 +123,12 @@ export default function HostBar({
 
   return (
     <div className="hostbar">
-      <span className={`signaldot dot-${shut ? "off" : passed ? "warn" : "live"}`} aria-hidden="true" />
-      <span className="lab">Host</span>
-      <span className="state">
-        {state}
-        <span className={`statuspill spill-${shut ? "off" : passed ? "warn" : "live"}`}>
-          {shut ? "Closed" : passed ? "Locked" : "Live"}
-        </span>
+      <span className={`hb-mark tone-${shut ? "off" : passed ? "warn" : "live"}`} title={state}>
+        <i aria-hidden="true" />
+        {shut ? "Closed" : passed ? "Locked" : "Live"}
       </span>
+      <span className="hb-sr">{state}</span>
+      <span className="hb-slash" aria-hidden="true">/</span>
 
       <span className="lab">Closes</span>
       <DeadlineDial
@@ -145,6 +143,7 @@ export default function HostBar({
 
       {moves !== undefined && (
         <>
+          <span className="hb-slash" aria-hidden="true">/</span>
           <span className="lab">Crowd gets</span>
           <select
             className="hostsel"
